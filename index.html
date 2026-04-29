@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi-hole // Network Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;600;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:       #080c10;
+    --surface:  #0d1117;
+    --border:   #1a2332;
+    --green:    #00ff88;
+    --red:      #ff3f5b;
+    --blue:     #00b4ff;
+    --dim:      #3a4a5a;
+    --text:     #c8d8e8;
+    --muted:    #5a7a8a;
+    --font-mono: 'Share Tech Mono', monospace;
+    --font-ui:   'Exo 2', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+    color: var(--green);
+    letter-spacing: 0.15em;
+    text-shadow: 0 0 12px rgba(0,255,136,0.5);
+  }
+
+  .logo span { color: var(--muted); }
+
+  .status-pill {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    color: var(--green);
+    border: 1px solid var(--green);
+    padding: 4px 12px;
+    border-radius: 2px;
+    text-shadow: 0 0 8px rgba(0,255,136,0.5);
+    animation: pulse-border 2s infinite;
+  }
+
+  @keyframes pulse-border {
+    0%, 100% { box-shadow: 0 0 4px rgba(0,255,136,0.3); }
+    50%       { box-shadow: 0 0 12px rgba(0,255,136,0.6); }
+  }
+
+  .last-updated {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--muted);
+  }
+
+  /* ── LAYOUT ── */
+  main { padding: 28px 32px; max-width: 1600px; margin: 0 auto; }
+
+  /* ── STAT CARDS ── */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 22px 24px;
+    position: relative;
+    overflow: hidden;
+    animation: fadeUp 0.4s ease both;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.green::before { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .stat-card.red::before   { background: var(--red);   box-shadow: 0 0 8px var(--red); }
+  .stat-card.blue::before  { background: var(--blue);  box-shadow: 0 0 8px var(--blue); }
+  .stat-card.dim::before   { background: var(--dim); }
+
+  .stat-label {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .stat-value {
+    font-family: var(--font-mono);
+    font-size: 2.2rem;
+    font-weight: 400;
+    line-height: 1;
+  }
+
+  .stat-card.green .stat-value { color: var(--green); text-shadow: 0 0 16px rgba(0,255,136,0.4); }
+  .stat-card.red   .stat-value { color: var(--red);   text-shadow: 0 0 16px rgba(255,63,91,0.4); }
+  .stat-card.blue  .stat-value { color: var(--blue);  text-shadow: 0 0 16px rgba(0,180,255,0.4); }
+  .stat-card.dim   .stat-value { color: var(--text); }
+
+  .stat-sub {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  /* ── PANELS ── */
+  .panel-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .panel-grid.three { grid-template-columns: 2fr 1fr 1fr; }
+  .panel-grid.full  { grid-template-columns: 1fr; }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px 22px;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .panel-title {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .panel-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── CHART ── */
+  .chart-wrap { position: relative; height: 220px; }
+
+  /* ── BAR LISTS ── */
+  .bar-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .bar-item { display: flex; flex-direction: column; gap: 4px; }
+
+  .bar-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .bar-domain {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 65%;
+  }
+
+  .bar-count {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--muted);
+  }
+
+  .bar-track {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .bar-fill.red   { background: var(--red);   box-shadow: 0 0 6px rgba(255,63,91,0.5); }
+  .bar-fill.green { background: var(--green); box-shadow: 0 0 6px rgba(0,255,136,0.5); }
+
+  /* ── CLIENT TABLE ── */
+  .client-table { width: 100%; border-collapse: collapse; }
+
+  .client-table th {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    text-align: left;
+    padding: 0 0 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .client-table td {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    padding: 9px 0;
+    border-bottom: 1px solid rgba(26,35,50,0.5);
+    color: var(--text);
+  }
+
+  .client-table td.ip { color: var(--blue); }
+  .client-table td.blocked-cell { color: var(--red); }
+  .client-table td.allowed-cell { color: var(--green); }
+
+  .mini-bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .mini-bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .mini-bar-inner { height: 100%; background: var(--red); border-radius: 2px; }
+
+  /* ── RECENT QUERIES ── */
+  .query-list { display: flex; flex-direction: column; gap: 0; }
+
+  .query-row {
+    display: grid;
+    grid-template-columns: 70px 1fr 120px 160px;
+    gap: 12px;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(26,35,50,0.4);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    animation: slideIn 0.2s ease both;
+  }
+
+  .query-row:hover { background: rgba(255,255,255,0.02); }
+
+  .q-time   { color: var(--muted); }
+  .q-domain { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .q-client { color: var(--blue); }
+  .q-status { text-align: right; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 2px;
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+  }
+
+  .badge.blocked { background: rgba(255,63,91,0.15); color: var(--red); border: 1px solid rgba(255,63,91,0.3); }
+  .badge.allowed { background: rgba(0,255,136,0.08); color: var(--green); border: 1px solid rgba(0,255,136,0.2); }
+  .badge.cached  { background: rgba(0,180,255,0.08); color: var(--blue); border: 1px solid rgba(0,180,255,0.2); }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-6px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  /* ── LOADING ── */
+  #loading {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 9998;
+    transition: opacity 0.4s;
+  }
+
+  #loading.hidden { opacity: 0; pointer-events: none; }
+
+  .loader-text {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--green);
+    letter-spacing: 0.2em;
+    text-shadow: 0 0 10px rgba(0,255,136,0.5);
+  }
+
+  .loader-bar {
+    width: 200px;
+    height: 2px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .loader-bar-inner {
+    height: 100%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: load 1.2s ease forwards;
+  }
+
+  @keyframes load {
+    from { width: 0; }
+    to   { width: 100%; }
+  }
+
+  /* responsive */
+  @media (max-width: 900px) {
+    .panel-grid, .panel-grid.three { grid-template-columns: 1fr; }
+    .query-row { grid-template-columns: 60px 1fr 100px; }
+    .q-status { display: none; }
+    main { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="loader-text">// INITIALIZING NETWORK MONITOR</div>
+  <div class="loader-bar"><div class="loader-bar-inner"></div></div>
+</div>
+
+<header>
+  <div class="logo">PI<span>//</span>HOLE <span>►</span> NETWORK MONITOR</div>
+  <div class="status-pill">● LIVE</div>
+  <div class="last-updated" id="last-updated">--</div>
+</header>
+
+<main>
+
+  <!-- STAT CARDS -->
+  <div class="stat-grid">
+    <div class="stat-card green">
+      <div class="stat-label">// Total Queries</div>
+      <div class="stat-value" id="s-total">—</div>
+      <div class="stat-sub">all DNS requests</div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-label">// Blocked</div>
+      <div class="stat-value" id="s-blocked">—</div>
+      <div class="stat-sub" id="s-rate">— block rate</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="stat-label">// Allowed</div>
+      <div class="stat-value" id="s-allowed">—</div>
+      <div class="stat-sub">forwarded / cached</div>
+    </div>
+    <div class="stat-card dim">
+      <div class="stat-label">// Clients</div>
+      <div class="stat-value" id="s-clients">—</div>
+      <div class="stat-sub">devices on network</div>
+    </div>
+    <div class="stat-card dim">
+      <div class="stat-label">// Unique Domains</div>
+      <div class="stat-value" id="s-domains">—</div>
+      <div class="stat-sub">distinct hostnames</div>
+    </div>
+  </div>
+
+  <!-- TIMELINE + STATUS PIE -->
+  <div class="panel-grid" style="grid-template-columns: 2fr 1fr; margin-bottom:16px;">
+    <div class="panel">
+      <div class="panel-title">// Query Volume Over Time</div>
+      <div class="chart-wrap"><canvas id="timeline-chart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">// Status Distribution</div>
+      <div class="chart-wrap"><canvas id="status-chart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- TOP BLOCKED + TOP ALLOWED + CLIENTS -->
+  <div class="panel-grid three" style="margin-bottom:16px;">
+    <div class="panel">
+      <div class="panel-title">// Client Activity</div>
+      <table class="client-table" id="client-table">
+        <thead>
+          <tr>
+            <th>IP Address</th>
+            <th>Total</th>
+            <th>Allowed</th>
+            <th>Blocked</th>
+            <th style="width:80px">Block %</th>
+          </tr>
+        </thead>
+        <tbody id="client-tbody"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <div class="panel-title">// Top Blocked Domains</div>
+      <div class="bar-list" id="top-blocked"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">// Most Visited Domains</div>
+      <div class="bar-list" id="top-allowed"></div>
+    </div>
+  </div>
+
+  <!-- RECENT QUERIES -->
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-title">// Recent Queries (last 50)</div>
+    <div class="query-list" id="recent-list"></div>
+  </div>
+
+</main>
+
+<script>
+let timelineChart, statusChart;
+
+const fmt = n => n >= 1000 ? (n/1000).toFixed(1)+'k' : n;
+
+function badgeClass(status) {
+  if (status.includes("Block")) return "blocked";
+  if (status.includes("Cache") || status.includes("Stale") || status.includes("Expired")) return "cached";
+  return "allowed";
+}
+
+function renderStats(d) {
+  document.getElementById("s-total").textContent   = fmt(d.total);
+  document.getElementById("s-blocked").textContent = fmt(d.blocked);
+  document.getElementById("s-allowed").textContent = fmt(d.allowed);
+  document.getElementById("s-clients").textContent = d.unique_clients;
+  document.getElementById("s-domains").textContent = fmt(d.unique_domains);
+  document.getElementById("s-rate").textContent    = d.block_rate + "% block rate";
+  document.getElementById("last-updated").textContent =
+    "updated " + new Date().toLocaleTimeString();
+}
+
+function renderTimeline(d) {
+  const labels   = d.map(r => r.label);
+  const allowed  = d.map(r => r.allowed);
+  const blocked  = d.map(r => r.blocked);
+
+  const cfg = {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Allowed",
+          data: allowed,
+          borderColor: "#00ff88",
+          backgroundColor: "rgba(0,255,136,0.08)",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 0,
+          borderWidth: 1.5,
+        },
+        {
+          label: "Blocked",
+          data: blocked,
+          borderColor: "#ff3f5b",
+          backgroundColor: "rgba(255,63,91,0.12)",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 0,
+          borderWidth: 1.5,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { labels: { color: "#5a7a8a", font: { family: "Share Tech Mono", size: 10 }, boxWidth: 10 } }
+      },
+      scales: {
+        x: {
+          ticks: { color: "#3a4a5a", font: { family: "Share Tech Mono", size: 9 }, maxTicksLimit: 8 },
+          grid: { color: "rgba(26,35,50,0.6)" }
+        },
+        y: {
+          ticks: { color: "#3a4a5a", font: { family: "Share Tech Mono", size: 9 } },
+          grid: { color: "rgba(26,35,50,0.6)" }
+        }
+      }
+    }
+  };
+
+  if (timelineChart) timelineChart.destroy();
+  timelineChart = new Chart(document.getElementById("timeline-chart"), cfg);
+}
+
+function renderStatusPie(d) {
+  const colors = d.map(s =>
+    s.label.includes("Block") ? "#ff3f5b" :
+    s.label.includes("Cache") || s.label.includes("Stale") ? "#00b4ff" : "#00ff88"
+  );
+
+  const cfg = {
+    type: "doughnut",
+    data: {
+      labels: d.map(s => s.label),
+      datasets: [{ data: d.map(s => s.count), backgroundColor: colors, borderWidth: 0, hoverOffset: 6 }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "68%",
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: { color: "#5a7a8a", font: { family: "Share Tech Mono", size: 9 }, boxWidth: 8, padding: 8 }
+        }
+      }
+    }
+  };
+
+  if (statusChart) statusChart.destroy();
+  statusChart = new Chart(document.getElementById("status-chart"), cfg);
+}
+
+function renderBarList(containerId, items, colorClass) {
+  const max = items[0]?.count || 1;
+  const el = document.getElementById(containerId);
+  el.innerHTML = items.map(item => `
+    <div class="bar-item">
+      <div class="bar-row">
+        <span class="bar-domain" title="${item.domain}">${item.domain}</span>
+        <span class="bar-count">${item.count.toLocaleString()}</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill ${colorClass}" style="width:${(item.count/max*100).toFixed(1)}%"></div>
+      </div>
+    </div>
+  `).join("");
+}
+
+function renderClients(clients) {
+  const tbody = document.getElementById("client-tbody");
+  tbody.innerHTML = clients.map(c => {
+    const rate = c.total ? (c.blocked / c.total * 100).toFixed(1) : 0;
+    return `
+      <tr>
+        <td class="ip">${c.client}</td>
+        <td>${c.total.toLocaleString()}</td>
+        <td class="allowed-cell">${c.allowed.toLocaleString()}</td>
+        <td class="blocked-cell">${c.blocked.toLocaleString()}</td>
+        <td>
+          <div class="mini-bar-wrap">
+            <div class="mini-bar"><div class="mini-bar-inner" style="width:${rate}%"></div></div>
+            <span style="font-size:0.62rem;color:var(--muted)">${rate}%</span>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function renderRecent(queries) {
+  const el = document.getElementById("recent-list");
+  el.innerHTML = queries.map(q => `
+    <div class="query-row">
+      <span class="q-time">${q.time}</span>
+      <span class="q-domain" title="${q.domain}">${q.domain}</span>
+      <span class="q-client">${q.client}</span>
+      <span class="q-status"><span class="badge ${badgeClass(q.status)}">${
+        q.blocked ? "BLOCKED" : q.status.includes("Cache") ? "CACHED" : "ALLOWED"
+      }</span></span>
+    </div>
+  `).join("");
+}
+
+async function refresh() {
+  try {
+    const res = await fetch("/api/stats");
+    const d = await res.json();
+    renderStats(d);
+    renderTimeline(d.timeline);
+    renderStatusPie(d.status_dist);
+    renderBarList("top-blocked", d.top_blocked, "red");
+    renderBarList("top-allowed", d.top_allowed, "green");
+    renderClients(d.client_data);
+    renderRecent(d.recent);
+    document.getElementById("loading").classList.add("hidden");
+  } catch(e) {
+    console.error("Failed to fetch stats:", e);
+  }
+}
+
+// initial load + auto-refresh every 30s
+refresh();
+setInterval(refresh, 30000);
+</script>
+</body>
+</html>

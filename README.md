@@ -1,10 +1,12 @@
 # Pi-hole as a Network-Level Incident Response Tool
 
+### Live Dashboard with Real-Time DNS Monitoring and Client Enforcement
+
 ## 1. Project Overview
 
-This project demonstrates how Pi-hole, a network-wide DNS sinkhole, can be used as a lightweight incident response tool to detect and contain suspicious network activity. Pi-hole is deployed inside a Docker container on a dedicated machine and configured as the DNS resolver for all devices on the local network. By routing all DNS queries through Pi-hole, every domain request made by every device becomes visible, logged, and subject to enforcement.
+This project demonstrates how Pi-hole, a network-wide DNS sinkhole, can be used as a lightweight incident response tool to detect and contain suspicious network activity. Pi-hole runs inside a Docker container on a dedicated Raspberry Pi and is configured as the DNS resolver for all devices on the local network. Every DNS query made by every device is visible, logged, and subject to enforcement in real time.
 
-The main objective is to show how DNS-level monitoring can serve as an early warning system for malicious activity. The project covers deploying and configuring Pi-hole, simulating both normal and suspicious traffic, extracting and analyzing log data, and building a custom Python script that visualizes patterns such as unusual query frequency or repeated attempts to reach blocked domains.
+The core deliverable is a custom Flask-based web dashboard (`App.py` + `index.html`) that connects directly to Pi-hole's SQLite database and live log file to provide a genuinely real-time view of network DNS activity — with no external dependencies, no third-party dashboards, and no polling delay. The dashboard includes watchlist-based alerting, per-client traffic enforcement via iptables, and a domain allowlist manager, all accessible from a browser on the local network.
 
 ---
 
@@ -12,212 +14,214 @@ The main objective is to show how DNS-level monitoring can serve as an early war
 
 ### Why Pi-hole Matters in Incident Response
 
-Most security incidents do not start with a loud alarm. They start quietly, often with a device on the network reaching out to a domain it should not be contacting. DNS is one of the most fundamental protocols in networking and also one of the most commonly abused. Malware uses DNS to phone home to command-and-control (C2) servers. Phishing campaigns rely on DNS to direct users to fake sites. Data exfiltration can be tunneled through DNS requests. Because of this, DNS-level visibility is a foundational component of network security monitoring.
+Most security incidents do not start with a loud alarm. They start quietly — a device reaching out to a domain it should not be contacting. DNS is one of the most fundamental and most abused protocols in networking. Malware uses DNS to phone home to command-and-control (C2) servers. Phishing campaigns rely on DNS to redirect users. Data exfiltration can be tunneled through DNS. DNS-level visibility is therefore a foundational component of network security monitoring.
 
-Pi-hole addresses this directly. By acting as a DNS sinkhole, it blocks known malicious domains before a connection is ever established, and it logs every query whether allowed or blocked. This makes it directly applicable to two phases of the NIST SP 800-61 Incident Response lifecycle:
+This project takes that principle and builds a practical, self-hosted tool on top of it. By sitting directly on the Raspberry Pi running Pi-hole and reading the same SQLite database and log file that Pi-hole itself uses, the dashboard achieves sub-second update latency without requiring Kafka, a message broker, or any cloud infrastructure.
 
-* **Preparation:** Pi-hole is deployed proactively with blocklists loaded from threat intelligence feeds and community-maintained domain lists. It establishes a baseline of normal DNS behavior across all devices on the network.
-* **Detection and Analysis:** The query logs provide a continuous, queryable record of all DNS activity. Spikes in query frequency, repeated blocked requests, or traffic to newly registered domains are all indicators that something may be wrong.
+The dashboard directly supports two phases of the NIST SP 800-61 Incident Response lifecycle:
 
-While Pi-hole is not a full SIEM or EDR solution, it demonstrates the same core principles those tools rely on: collect data, establish a baseline, detect anomalies, and respond. Working through this project builds practical skills in DNS security, log analysis, Python scripting, and containerized tool deployment — all directly applicable to roles in IT security, system administration, and SOC analysis.
-
----
-
-## 3. Methodology
-
-### 3.1 Environment and Setup
-
-Pi-hole is deployed as a Docker container on a dedicated machine separate from the primary workstation. This separation keeps the DNS resolver isolated and ensures that all network traffic can be routed through it cleanly.
-
-**Requirements:**
-
-* Docker installed on the host machine
-* Pi-hole Docker image (`pihole/pihole`)
-* All network devices configured to use the Pi-hole host's IP as their DNS server
-* Python 3 with `pandas` and `matplotlib` for log analysis
-
-**Pi-hole Docker run command (example):**
-
-```bash
-docker run -d \
-  --name pihole \
-  -p 53:53/tcp -p 53:53/udp \
-  -p 80:80 \
-  -e TZ="America/New_York" \
-  -e WEBPASSWORD="yourpassword" \
-  -v "$(pwd)/etc-pihole:/etc/pihole" \
-  -v "$(pwd)/etc-dnsmasq.d:/etc/dnsmasq.d" \
-  --restart=unless-stopped \
-  pihole/pihole:latest
-```
-
-Once running, the admin dashboard is accessible at `http://[host-IP]/admin`.
-
-### 3.2 Tools and Frameworks
-
-| Tool               | Purpose                                            |
-| ------------------ | -------------------------------------------------- |
-| Pi-hole (Docker)   | DNS sinkhole, query logging, blocklist enforcement |
-| Docker             | Container runtime for Pi-hole deployment           |
-| Python 3           | Log parsing and data analysis                      |
-| pandas             | Structured log data manipulation                   |
-| matplotlib         | Visualization of query patterns and findings       |
-| nslookup / curl    | Manual DNS query simulation for controlled tests   |
-| Pi-hole Blocklists | Community and threat-intel domain blocklists       |
-
-No external dataset is used. All data is generated by the live network environment and captured by Pi-hole's built-in logging.
-
-### 3.3 Data Sources
-
-Pi-hole logs every DNS query that passes through it regardless of outcome. Each log entry contains:
-
-* **Timestamp** — when the query was made
-* **Query type** — A, AAAA, CNAME, etc.
-* **Domain name** — the domain being requested
-* **Client IP** — which device on the network made the request
-* **Response** — whether the query was forwarded, blocked, or served from cache
-* **Upstream resolver** — where allowed queries were forwarded
-
-Logs are accessible through the admin dashboard, the Pi-hole API, and raw log files inside the container at `/etc/pihole/pihole.log`. For offline analysis, logs are extracted using:
-
-```bash
-docker exec pihole cat /etc/pihole/pihole.log > pihole.log
-```
-
-### 3.4 Architecture and Workflow
-
-#### Overall Flow
-
-```
-Network Devices
-      │
-      │  DNS queries (all devices)
-      ▼
-  Pi-hole (Docker Container)
-      │
-      ├── Blocked? → Return sinkhole IP → Log as BLOCKED
-      │
-      └── Allowed? → Forward to upstream DNS → Log as FORWARDED
-                              │
-                         Query logs
-                              │
-                    Python Analysis Script
-                              │
-                    ┌─────────┴──────────┐
-               Visualizations        Findings Report
-```
-
-#### Incident Response Mapping
-
-| IR Phase             | Pi-hole Role                                                                   |
-| -------------------- | ------------------------------------------------------------------------------ |
-| Preparation          | Deploy container, load blocklists, configure all devices to use Pi-hole as DNS |
-| Detection & Analysis | Monitor query logs for anomalies, run analysis script to surface patterns      |
-| Containment          | Blacklist suspicious domains via admin UI, identify offending client IP        |
-| Post-Incident        | Review alert logs, update blocklists, document findings                        |
-
-### 3.5 Step-by-Step Process
-
-**Step 1 — Deploy Pi-hole in Docker**
-Run the Docker container on a dedicated machine. Confirm the admin dashboard loads and DNS resolution is working.
-
-**Step 2 — Configure Network Devices**
-Set all devices on the network to use the Pi-hole host's IP address as their DNS server. This can be done per-device or at the router level via DHCP settings.
-
-**Step 3 — Load Blocklists**
-In the admin dashboard under  *Adlists* , add blocklists. For security-focused testing, use lists that include known malware domains and C2 servers in addition to standard ad/tracker lists.
-
-**Step 4 — Generate Baseline Traffic**
-Browse normally for a period of time to populate the logs with typical DNS activity. This establishes a baseline of what normal looks like for this network.
-
-**Step 5 — Simulate Suspicious Traffic**
-Manually query known blocked or malicious domains using `nslookup` or `curl` to simulate what a compromised device might do. For example:
-
-```bash
-nslookup malware-domain-example.com [pihole-ip]
-```
-
-Observe how Pi-hole responds in real time on the dashboard.
-
-**Step 6 — Extract Logs**
-Copy the raw log file out of the container for offline analysis:
-
-```bash
-docker exec pihole cat /etc/pihole/pihole.log > pihole.log
-```
-
-**Step 7 — Run Analysis Script**
-Parse and analyze the log data with the custom Python script. The script produces:
-
-* Top blocked domains (most frequently attempted)
-* Top querying clients (which device made the most requests)
-* Query frequency over time (timeline chart)
-* Block rate (ratio of blocked to allowed queries)
-
-**Step 8 — Interpret and Document Findings**
-Review the visualizations for anomalies. Domains that appear in the blocked list with high frequency, or a single client generating disproportionate query volume, are indicators worth investigating.
+* **Detection and Analysis:** The query feed updates in real time as DNS traffic occurs. Watchlist hits fire instant toast notifications with action buttons. Per-client block rate and query volume are surfaced immediately.
+* **Containment:** From the dashboard, an operator can block a client IP via iptables or add a domain to Pi-hole's allowlist without touching the command line — in one click, during an active incident.
 
 ---
 
-## 4. Results
+## 3. System Architecture
 
-### Admin Dashboard
-
-The Pi-hole admin dashboard provides a real-time overview of DNS activity including total queries, blocked percentage, top clients, and top domains. During the experiment, the dashboard confirmed that all devices on the network were routing DNS through Pi-hole and that blocklists were active.
-
-### Normal Traffic Baseline
-
-During normal browsing, the query log showed expected activity: a mix of allowed queries to known services (CDNs, OS update servers, streaming platforms) with a baseline block rate of approximately 15–20% driven primarily by ad and tracker domains.
-
-### Controlled Malicious Query Simulation
-
-When `nslookup` was used to manually query domains present on the blocklists, Pi-hole returned a sinkhole response immediately. The dashboard updated in real time and the queries appeared in the log with a `BLOCKED` status within milliseconds. No outbound connection to those domains was made.
-
-### Analysis Script Output
-
-The custom Python script processed the extracted log file and produced the following findings:
-
-* **Top blocked domains** clearly showed the simulated malicious queries at the top of the blocked list with high repetition counts.
-* **Per-client query volume** identified the test machine as the top querying client during the simulation period — consistent with what would appear during a real beaconing scenario.
-* **Query frequency timeline** showed a visible spike in blocked requests at the exact time the simulation was conducted, which would stand out clearly against the normal baseline.
-* **Block rate** rose significantly during the simulation window compared to the baseline, providing a quantifiable signal.
-
-### Alert Log Sample
+### Physical Setup
 
 ```
-[2025-04-15 14:32:01] BLOCKED | Client: 192.168.1.105 | Domain: c2-domain-example.com | Type: A
-[2025-04-15 14:32:03] BLOCKED | Client: 192.168.1.105 | Domain: c2-domain-example.com | Type: A
-[2025-04-15 14:32:05] BLOCKED | Client: 192.168.1.105 | Domain: c2-domain-example.com | Type: A
+All Network Devices
+        │
+        │  DNS queries (routed via DHCP)
+        ▼
+  Raspberry Pi 4
+  ├── Docker: Pi-hole container
+  │     ├── DNS resolver (port 53)
+  │     ├── pihole-FTL.db  (SQLite — all query history)
+  │     └── /var/log/pihole/pihole.log  (live log, tailed in real time)
+  │
+  └── Python: Flask app (port 5000)
+        ├── Watcher thread (tails pihole.log)
+        ├── SSE: /api/stats/stream  → pushes stats on every new query
+        ├── SSE: /api/alerts/stream → pushes watchlist hits instantly
+        └── REST: block / unblock / allowlist / watchlist APIs
 ```
 
-Repeated blocked queries from the same client to the same domain within seconds is a strong indicator of automated beaconing behavior — exactly the pattern a C2 callback would produce.
+### How Live Updates Work
+
+The Flask app runs a background watcher thread that tails `/var/log/pihole/pihole.log` in real time — the same way `tail -f` works. Every time a new DNS query line appears:
+
+1. The domain is checked against the watchlist. If it matches, an alert is pushed immediately to all connected browsers via Server-Sent Events (SSE).
+2. A debounce timer (1 second) determines whether to re-query the SQLite database and push a full stats update. This prevents hammering the database on high-traffic networks while still keeping the dashboard visibly live.
+
+The browser connects to two persistent SSE streams on load and never polls. Updates arrive as they happen.
+
+```
+pihole.log (new line)
+        │
+        ├── Watchlist match? ──► push alert to /api/alerts/stream ──► toast notification
+        │
+        └── Debounce (1s) ──► query pihole-FTL.db ──► push to /api/stats/stream ──► dashboard re-renders
+```
 
 ---
 
-## 5. Conclusion
+## 4. Tools and Stack
 
-This project demonstrated that Pi-hole, deployed in a Docker container, is a practical and low-cost tool that can meaningfully contribute to an incident response workflow. It directly supports the Preparation and Detection & Analysis phases of the NIST SP 800-61 IR lifecycle by providing proactive domain blocking and detailed DNS query logging across every device on the network.
-
-Key insights from the project:
-
-* **DNS is a high-signal data source.** Because virtually all network activity involves DNS, logging at that layer captures a broad picture of device behavior without requiring deep packet inspection or complex configuration.
-* **Blocklists are effective but imperfect.** Pi-hole successfully blocked all queries to domains on its lists, but this depends entirely on those lists being up to date. Threats using newly registered or uncategorized domains would not be caught. This limitation reflects a broader principle in security: blocklist-based defenses are necessary but not sufficient.
-* **Behavioral patterns matter as much as individual events.** A single blocked query is not alarming. Hundreds of blocked queries from one device to the same domain within minutes is a different story. The analysis script reinforced this by showing how aggregating log data reveals patterns that raw logs do not.
-* **Encrypted DNS (DoH/DoT) is a real gap.** Devices or applications configured to use DNS-over-HTTPS bypass Pi-hole entirely. This is an important real-world limitation that any DNS-based monitoring strategy must account for.
-
-For future improvements, the project could be extended with automated alerting when block rates exceed a threshold, integration with a threat intelligence feed for automatic blocklist updates, or log forwarding into a SIEM like Splunk or the ELK stack for longer-term retention and correlation. Monitoring multiple network segments or VLANs would also make the setup closer to an enterprise deployment.
-
-Overall, this project reinforced that understanding monitoring at a fundamental level — what data is collected, where it comes from, and how to interpret it — is essential groundwork for anyone working in security or system administration.
+| Component           | Tool                           | Purpose                                                 |
+| ------------------- | ------------------------------ | ------------------------------------------------------- |
+| DNS Sinkhole        | Pi-hole (Docker)               | DNS resolver, blocklist enforcement, query logging      |
+| Container Runtime   | Docker                         | Isolates Pi-hole on the Raspberry Pi                    |
+| Backend             | Python 3 / Flask               | Serves dashboard, reads DB and log, manages SSE streams |
+| Database            | SQLite (`pihole-FTL.db`)     | All historical DNS query data                           |
+| Live Log            | `/var/log/pihole/pihole.log` | Real-time DNS event source                              |
+| Frontend            | Vanilla HTML/CSS/JS + Chart.js | Dashboard UI, no framework dependencies                 |
+| Network Enforcement | iptables                       | Client IP blocking via `FORWARD`chain DROP rules      |
+| DNS Allowlisting    | `pihole allowlist`CLI        | Domain allowlisting via subprocess call                 |
+| Remote Dev          | VS Code Remote SSH             | Development directly on the Raspberry Pi                |
 
 ---
 
-## 6. Resources
+## 5. Dashboard Features
+
+### Real-Time Stats (event-driven, not polled)
+
+* Total queries, blocked count, allowed count, block rate
+* Unique clients and unique domains seen
+* Block rate color-coded: green (normal), yellow (elevated >15%), red (high >30%)
+* "Updated" timestamp reflects the moment of the last push from the server
+
+### Query Volume Timeline
+
+* Hourly chart of allowed vs. blocked queries
+* Rendered with Chart.js, updates in-place without flicker on each push
+
+### Status Distribution
+
+* Doughnut chart breaking down query outcomes by Pi-hole status code
+* Color-coded: blocked (red), cached (blue), allowed (green)
+
+### Client Activity Table
+
+* Per-device breakdown: total, allowed, blocked, block percentage with mini bar
+* **Block** button: immediately adds an iptables `FORWARD DROP` rule for that IP
+* **Unblock** button: removes the iptables rule
+* Blocked clients marked with a red indicator that persists across re-renders
+
+### Top Blocked / Top Allowed Domains
+
+* Animated bar lists showing the 10 most blocked and 10 most queried allowed domains
+* Bar widths update smoothly on each stats push
+
+### Recent Queries Feed
+
+* Last 50 DNS queries with timestamp, domain, client IP, and status badge
+* Blocked rows highlighted in red
+* New queries flash green on arrival so activity is visible at a glance
+
+### Watchlist Manager
+
+* Editable list of domains to monitor (e.g. `tiktok.com`, `chatgpt.com`)
+* Add or remove entries from the browser; changes take effect immediately in the watcher thread
+* Watchlist persists in memory for the session
+
+### Real-Time Alert Toasts
+
+* When any device queries a watchlisted domain, a toast notification fires instantly
+* Toast shows: domain, client IP, timestamp, whether it was blocked or allowed through
+* One-click actions from the toast: **Allow Domain** (adds to Pi-hole allowlist) or **Block Client** (iptables DROP)
+* Alerts auto-dismiss after 30 seconds; logged to the Alert Log panel
+
+### Alert Log
+
+* Persistent in-session log of all watchlist hits
+* Shows action taken (BLOCKED / ALLOWED / pending) color-coded per outcome
+
+---
+
+## 6. Running the Dashboard
+
+### Prerequisites
+
+```bash
+# On the Raspberry Pi, inside the Pi-hole working directory
+pip3 install flask --break-system-packages
+```
+
+### Start
+
+```bash
+sudo python3 App.py
+```
+
+`sudo` is required for iptables access. The watcher thread starts automatically and begins tailing the Pi-hole log.
+
+### Access
+
+Open a browser on any device on the network:
+
+```
+http://192.168.0.2:5000
+```
+
+---
+
+## 7. API Reference
+
+| Method | Endpoint                  | Description                                      |
+| ------ | ------------------------- | ------------------------------------------------ |
+| GET    | `/api/stats`            | One-shot full stats snapshot (JSON)              |
+| GET    | `/api/stats/stream`     | SSE stream — pushes stats on each new DNS query |
+| GET    | `/api/alerts/stream`    | SSE stream — pushes watchlist hits instantly    |
+| POST   | `/api/action/allow`     | Add domain to Pi-hole allowlist                  |
+| POST   | `/api/action/block`     | Block client IP via iptables                     |
+| POST   | `/api/action/unblock`   | Remove iptables block for client IP              |
+| POST   | `/api/watchlist/add`    | Add domain to watchlist                          |
+| POST   | `/api/watchlist/remove` | Remove domain from watchlist                     |
+
+---
+
+## 8. Key Design Decisions
+
+**Event-driven over polling.** The watcher thread drives all updates. The browser never polls — it holds open two SSE connections and reacts to pushes. This eliminates the artificial delay of an interval timer and makes the dashboard feel genuinely live.
+
+**Debouncing the DB reads.** The SQLite database is read at most once per second regardless of query volume. On a quiet network this means near-instant updates; on a busy network it prevents excessive load on the Pi without any visible lag to the user.
+
+**`stream_with_context` for SSE.** Flask's default response buffering delays SSE delivery. Wrapping generators in `stream_with_context` ensures each event is flushed to the client immediately rather than accumulating in a buffer.
+
+**No frontend framework.** The dashboard is a single `index.html` file with no build step, no npm, no bundler. Chart.js is loaded from a CDN. This keeps deployment as simple as copying two files to the Pi.
+
+**iptables for containment.** Blocking a client at the iptables `FORWARD` chain level drops all traffic from that IP at the network layer — not just DNS. This is a meaningful containment action, not just a DNS block.
+
+---
+
+## 9. Limitations and Future Work
+
+**Encrypted DNS (DoH/DoT).** Devices or apps configured to use DNS-over-HTTPS bypass Pi-hole entirely and will not appear in the dashboard. This is a real gap in any DNS-based monitoring approach.
+
+**Blocklist freshness.** Pi-hole only blocks what is on its lists. Newly registered domains or C2 servers not yet in any blocklist will pass through. Behavioral detection (the watchlist and per-client volume analysis) partially compensates for this.
+
+**Session-only state.** Blocked client IPs and watchlist additions are lost when the Flask app restarts. Persisting these to a config file or small database would be a straightforward improvement.
+
+**iptables vs. nftables.** Newer Linux kernels on Raspberry Pi OS use nftables as the backend. The iptables commands used here work via the compatibility layer but a future version should call nftables directly.
+
+**Potential extensions:**
+
+* Persistent watchlist and blocked-client storage (JSON or SQLite)
+* Email or webhook alerts for watchlist hits
+* Per-client query history drill-down view
+* Automatic blocklist updates from threat intelligence feeds
+* Log forwarding to a SIEM (Splunk, ELK) for long-term retention
+
+---
+
+## 10. Resources
 
 * Pi-hole Documentation: https://docs.pi-hole.net/
 * Pi-hole Docker Setup: https://github.com/pi-hole/docker-pi-hole
+* Flask Documentation: https://flask.palletsprojects.com/
+* Server-Sent Events (MDN): https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events
+* Chart.js Documentation: https://www.chartjs.org/docs/
+* iptables man page: https://linux.die.net/man/8/iptables
 * NIST SP 800-61 (Incident Handling Guide): https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-61r2.pdf
-* psutil Documentation: https://psutil.readthedocs.io/
-* pandas Documentation: https://pandas.pydata.org/docs/
-* matplotlib Documentation: https://matplotlib.org/stable/index.html
 * DNS Sinkholes Explained: https://www.sans.org/white-papers/33523/
-* draw.io (for diagrams): https://www.drawio.com/

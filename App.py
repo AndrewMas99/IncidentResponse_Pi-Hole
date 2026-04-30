@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Pi-hole Dashboard — Flask Backend with Real-Time Alerts
+Pi-hole Dashboard — Flask Backend with Real-Time Alerts + Live Stats Stream
 Run with: sudo python3 App.py
 """
- 
+
 from flask import Flask, jsonify, render_template, Response, request
 import sqlite3
 import subprocess
@@ -12,11 +12,11 @@ import time
 import threading
 from collections import defaultdict
 from datetime import datetime
- 
+
 app = Flask(__name__)
- 
+
 DB_PATH = "pihole-FTL.db"
- 
+
 # ─────────────────────────────────────────────
 # WATCHLIST — domains that trigger alerts
 # ─────────────────────────────────────────────
@@ -28,9 +28,9 @@ WATCHLIST = {
     "www.tiktok.com",
     # add more here
 }
- 
+
 BLOCKED_STATUSES = {1, 5, 6, 7, 8, 9, 12}
- 
+
 STATUS_LABELS = {
     1: "Blocked (Gravity)",
     2: "Allowed (Forwarded)",
@@ -46,13 +46,13 @@ STATUS_LABELS = {
     16: "Cache Expired",
     17: "Cached (Stale)",
 }
- 
+
 # ─────────────────────────────────────────────
 # SSE — alert queue shared across threads
 # ─────────────────────────────────────────────
 alert_subscribers = []
 alert_lock = threading.Lock()
- 
+
 def push_alert(alert):
     """Push alert to all connected SSE clients."""
     with alert_lock:
@@ -64,100 +64,85 @@ def push_alert(alert):
                 dead.append(q)
         for d in dead:
             alert_subscribers.remove(d)
- 
+
 # ─────────────────────────────────────────────
-# WATCHER THREAD — polls DB for watchlist hits
+# WATCHER THREAD — tails pihole log for watchlist hits
 # ─────────────────────────────────────────────
 seen_ids = set()
- 
+
 def watcher():
-    global seen_ids
-    print("[*] Watcher thread started")
-    # seed seen_ids with existing queries so we don't flood alerts on startup
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT id FROM query_storage")
-    seen_ids = {r[0] for r in cur.fetchall()}
-    conn.close()
-    print(f"[*] Seeded {len(seen_ids)} existing query IDs")
- 
+    log_path = "/var/log/pihole/pihole.log"
+    print(f"[*] Watcher watching: {log_path}")
+    try:
+        f = open(log_path, "r")
+        f.seek(0, 2)  # jump to end of file
+    except Exception as e:
+        print(f"[!] Can't open log: {e}")
+        return
+
     while True:
         try:
-            conn = get_conn()
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT id, timestamp, status, domain, client
-                FROM queries
-                ORDER BY id DESC
-                LIMIT 200
-            """)
-            rows = cur.fetchall()
-            conn.close()
- 
-            for row in rows:
-                qid, ts, status, domain, client = row
-                if qid in seen_ids:
-                    continue
-                seen_ids.add(qid)
- 
-                if domain and domain.lower().rstrip('.') in WATCHLIST:
-                    alert = {
-                        "id": qid,
-                        "timestamp": datetime.utcfromtimestamp(ts).strftime("%H:%M:%S"),
-                        "domain": domain,
-                        "client": client,
-                        "status": STATUS_LABELS.get(status, f"Status {status}"),
-                        "blocked": status in BLOCKED_STATUSES,
-                    }
-                    print(f"[!] WATCHLIST HIT: {client} → {domain}")
-                    push_alert(alert)
- 
+            line = f.readline()
+            if not line:
+                time.sleep(0.5)
+                continue
+            # Pi-hole log format: date time dnsmasq[pid]: query[A] domain from ip
+            if "query[" in line:
+                parts = line.strip().split()
+                if len(parts) >= 6:
+                    domain = parts[5]
+                    client = parts[-1]
+                    if domain.lower().rstrip('.') in WATCHLIST:
+                        alert = {
+                            "id": hash(line),
+                            "timestamp": parts[1],
+                            "domain": domain,
+                            "client": client,
+                            "status": "Query Detected",
+                            "blocked": False,
+                        }
+                        print(f"[!] WATCHLIST HIT: {client} → {domain}")
+                        push_alert(alert)
         except Exception as e:
             print(f"[watcher error] {e}")
- 
-        time.sleep(3)
- 
+            time.sleep(1)
+
 # ─────────────────────────────────────────────
 # DB HELPER
 # ─────────────────────────────────────────────
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=1)
     conn.text_factory = lambda b: b.decode(errors="replace")
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
     return conn
- 
+
 # ─────────────────────────────────────────────
-# ROUTES
+# STATS HELPER — shared by /api/stats and /api/stats/stream
 # ─────────────────────────────────────────────
-@app.route("/")
-def index():
-    with open("index.html") as f:
-        return f.read()
- 
-@app.route("/api/stats")
-def stats():
+def get_stats_data():
     conn = get_conn()
     cur = conn.cursor()
- 
+
     cur.execute("SELECT COUNT(*) FROM queries")
     total = cur.fetchone()[0]
- 
+
     cur.execute(f"SELECT COUNT(*) FROM queries WHERE status IN ({','.join(str(s) for s in BLOCKED_STATUSES)})")
     blocked = cur.fetchone()[0]
- 
+
     cur.execute("SELECT COUNT(DISTINCT client) FROM queries")
     clients = cur.fetchone()[0]
- 
+
     cur.execute("SELECT COUNT(DISTINCT domain) FROM queries")
     domains = cur.fetchone()[0]
- 
+
     cur.execute(f"""
         SELECT domain, COUNT(*) as cnt FROM queries
         WHERE status IN ({','.join(str(s) for s in BLOCKED_STATUSES)})
         GROUP BY domain ORDER BY cnt DESC LIMIT 10
     """)
     top_blocked = [{"domain": r["domain"], "count": r["cnt"]} for r in cur.fetchall()]
- 
+
     cur.execute(f"""
         SELECT domain, COUNT(*) as cnt FROM queries
         WHERE status NOT IN ({','.join(str(s) for s in BLOCKED_STATUSES)})
@@ -166,20 +151,20 @@ def stats():
         GROUP BY domain ORDER BY cnt DESC LIMIT 10
     """)
     top_allowed = [{"domain": r["domain"], "count": r["cnt"]} for r in cur.fetchall()]
- 
+
     cur.execute("""
         SELECT client, COUNT(*) as total FROM queries
         GROUP BY client ORDER BY total DESC LIMIT 10
     """)
     all_clients = {r["client"]: r["total"] for r in cur.fetchall()}
- 
+
     cur.execute(f"""
         SELECT client, COUNT(*) as blocked FROM queries
         WHERE status IN ({','.join(str(s) for s in BLOCKED_STATUSES)})
         GROUP BY client
     """)
     blocked_by_client = {r["client"]: r["blocked"] for r in cur.fetchall()}
- 
+
     client_data = [
         {
             "client": ip,
@@ -189,13 +174,13 @@ def stats():
         }
         for ip, total_count in all_clients.items()
     ]
- 
+
     cur.execute("SELECT status, COUNT(*) as cnt FROM queries GROUP BY status ORDER BY cnt DESC")
     status_dist = [
         {"label": STATUS_LABELS.get(r["status"], f"Status {r['status']}"), "count": r["cnt"]}
         for r in cur.fetchall()
     ]
- 
+
     cur.execute("""
         SELECT CAST(timestamp/3600 AS INTEGER)*3600 as hour_ts,
                status, COUNT(*) as cnt
@@ -204,7 +189,7 @@ def stats():
         ORDER BY hour_ts
     """)
     rows = cur.fetchall()
- 
+
     timeline = defaultdict(lambda: {"allowed": 0, "blocked": 0})
     for r in rows:
         ts = r["hour_ts"]
@@ -212,7 +197,7 @@ def stats():
             timeline[ts]["blocked"] += r["cnt"]
         else:
             timeline[ts]["allowed"] += r["cnt"]
- 
+
     timeline_data = [
         {
             "timestamp": ts,
@@ -222,7 +207,7 @@ def stats():
         }
         for ts, v in sorted(timeline.items())
     ]
- 
+
     cur.execute("""
         SELECT timestamp, domain, client, status FROM queries
         ORDER BY timestamp DESC LIMIT 50
@@ -237,10 +222,10 @@ def stats():
         }
         for r in cur.fetchall()
     ]
- 
+
     conn.close()
- 
-    return jsonify({
+
+    return {
         "total": total,
         "blocked": blocked,
         "allowed": total - blocked,
@@ -254,8 +239,37 @@ def stats():
         "timeline": timeline_data,
         "recent": recent,
         "watchlist": sorted(WATCHLIST),
-    })
- 
+    }
+
+# ─────────────────────────────────────────────
+# ROUTES
+# ─────────────────────────────────────────────
+@app.route("/")
+def index():
+    with open("index.html") as f:
+        return f.read()
+
+@app.route("/api/stats")
+def stats():
+    return jsonify(get_stats_data())
+
+@app.route("/api/stats/stream")
+def stats_stream():
+    """SSE endpoint — pushes full stats payload every 3 seconds."""
+    def generate():
+        yield "data: {\"type\": \"connected\"}\n\n"
+        while True:
+            try:
+                data = get_stats_data()
+                yield f"data: {json.dumps(data)}\n\n"
+            except Exception as e:
+                print(f"[stats_stream error] {e}")
+                yield f"data: {{\"error\": \"{e}\"}}\n\n"
+            time.sleep(3)
+
+    return Response(generate(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
 @app.route("/api/alerts/stream")
 def alert_stream():
     """SSE endpoint — dashboard connects here to receive real-time alerts."""
@@ -276,10 +290,10 @@ def alert_stream():
             with alert_lock:
                 if my_queue in alert_subscribers:
                     alert_subscribers.remove(my_queue)
- 
+
     return Response(generate(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
- 
+
 @app.route("/api/action/allow", methods=["POST"])
 def action_allow():
     """Whitelist a domain in Pi-hole."""
@@ -296,7 +310,7 @@ def action_allow():
         return jsonify({"ok": True, "domain": domain, "output": result.stdout.strip()})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
- 
+
 @app.route("/api/action/block", methods=["POST"])
 def action_block():
     """Block client IP via iptables."""
@@ -313,7 +327,7 @@ def action_block():
         return jsonify({"ok": True, "client": client_ip})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
- 
+
 @app.route("/api/action/unblock", methods=["POST"])
 def action_unblock():
     """Remove iptables block for a client IP."""
@@ -329,20 +343,20 @@ def action_unblock():
         return jsonify({"ok": True, "client": client_ip})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
- 
+
 @app.route("/api/watchlist/add", methods=["POST"])
 def watchlist_add():
     domain = request.json.get("domain", "").strip().lower()
     if domain:
         WATCHLIST.add(domain)
     return jsonify({"ok": True, "watchlist": sorted(WATCHLIST)})
- 
+
 @app.route("/api/watchlist/remove", methods=["POST"])
 def watchlist_remove():
     domain = request.json.get("domain", "").strip().lower()
     WATCHLIST.discard(domain)
     return jsonify({"ok": True, "watchlist": sorted(WATCHLIST)})
- 
+
 # ─────────────────────────────────────────────
 # STARTUP
 # ─────────────────────────────────────────────

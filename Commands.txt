@@ -1,18 +1,88 @@
+PI-HOLE RASPBERRY PI SETUP — COMMANDS IN ORDER
+================================================
+ 
+ 
+INITIAL SYSTEM SETUP
+--------------------
 sudo apt update && sudo apt upgrade -y
-
+ 
+ 
+INSTALL DOCKER
+--------------
 curl -fsSL https://get.docker.com | sh
-
 sudo systemctl enable docker
 sudo systemctl start docker
-
 sudo usermod -aG docker $USER
 newgrp docker
-
 sudo apt install docker-compose-plugin -y
-
 docker --version
 docker compose version
-
+ 
+ 
+SET UP PI-HOLE DIRECTORY
+------------------------
 mkdir -p ~/pihole
 cd ~/pihole
-
+nano docker-compose.yml
+docker compose up -d
+docker ps
+ 
+ 
+INSTALL FLASK
+-------------
+pip3 install flask --break-system-packages
+ 
+ 
+GET DASHBOARD FILES ONTO THE PI
+--------------------------------
+cd ~
+nano App.py
+nano index.html
+(or transferred via VS Code Remote SSH)
+ 
+ 
+FIND THE PI-HOLE DATABASE
+--------------------------
+docker inspect pihole
+find / -name "pihole-FTL.db" 2>/dev/null
+ 
+ 
+TEST RUN THE DASHBOARD
+-----------------------
+sudo python3 App.py
+ 
+ 
+DEBUGGING / VERIFICATION COMMANDS
+-----------------------------------
+sudo iptables -L INPUT -n --line-numbers
+sudo iptables -L DOCKER-USER -n --line-numbers
+sudo tcpdump -i any port 53 -n
+ 
+(on Windows machine)
+ipconfig /flushdns
+nslookup google.com 192.168.0.2
+ 
+ 
+CLEAN UP WRONG INPUT RULES
+---------------------------
+sudo iptables -D INPUT -s 192.168.0.74 -p udp --dport 53 -j DROP
+sudo iptables -D INPUT -s 192.168.0.74 -p tcp --dport 53 -j DROP
+ 
+ 
+SET UP SYSTEMD AUTO-START
+--------------------------
+sudo nano /etc/systemd/system/pihole-dashboard.service
+sudo systemctl daemon-reload
+sudo systemctl enable pihole-dashboard
+sudo systemctl start pihole-dashboard
+sudo systemctl status pihole-dashboard
+ 
+ 
+ONGOING COMMANDS YOU WILL KEEP USING
+--------------------------------------
+sudo journalctl -u pihole-dashboard -f          # live dashboard logs
+sudo systemctl restart pihole-dashboard         # after editing App.py
+docker compose restart                          # restart Pi-hole container
+docker logs pihole                              # Pi-hole container logs
+cat ~/blocked_clients.json                      # check persisted blocks
+sudo iptables -L DOCKER-USER -n --line-numbers  # verify block rules are active

@@ -100,17 +100,17 @@
   .btn { font-family: var(--font-mono); font-size: 0.65rem; letter-spacing: 0.1em; padding: 6px 14px; border: 1px solid; background: transparent; cursor: pointer; border-radius: 2px; transition: all 0.15s; }
   .btn:disabled { opacity: 0.5; cursor: default; }
   .btn-allow   { color: var(--green); border-color: var(--green); }
-  .btn-allow:hover   { background: rgba(0,255,136,0.1); box-shadow: 0 0 8px rgba(0,255,136,0.3); }
+  .btn-allow:hover:not(:disabled)   { background: rgba(0,255,136,0.1); box-shadow: 0 0 8px rgba(0,255,136,0.3); }
   .btn-block   { color: var(--red);   border-color: var(--red); }
-  .btn-block:hover   { background: rgba(255,63,91,0.1); box-shadow: 0 0 8px rgba(255,63,91,0.3); }
+  .btn-block:hover:not(:disabled)   { background: rgba(255,63,91,0.1); box-shadow: 0 0 8px rgba(255,63,91,0.3); }
   .btn-unblock { color: var(--blue);  border-color: var(--blue); }
-  .btn-unblock:hover { background: rgba(0,180,255,0.1); box-shadow: 0 0 8px rgba(0,180,255,0.3); }
+  .btn-unblock:hover:not(:disabled) { background: rgba(0,180,255,0.1); box-shadow: 0 0 8px rgba(0,180,255,0.3); }
   .btn-dismiss { color: var(--muted); border-color: var(--dim); }
-  .btn-dismiss:hover { background: rgba(255,255,255,0.04); }
+  .btn-dismiss:hover:not(:disabled) { background: rgba(255,255,255,0.04); }
 
   .toast-result { font-family: var(--font-mono); font-size: 0.65rem; margin-top: 8px; padding: 6px 10px; border-radius: 2px; display: none; }
-  .toast-result.ok  { background: rgba(0,255,136,0.08); color: var(--green); border: 1px solid rgba(0,255,136,0.2); }
-  .toast-result.err { background: rgba(255,63,91,0.08); color: var(--red);   border: 1px solid rgba(255,63,91,0.2); }
+  .toast-result.ok  { background: rgba(0,255,136,0.08); color: var(--green); border: 1px solid rgba(0,255,136,0.2); display: block; }
+  .toast-result.err { background: rgba(255,63,91,0.08); color: var(--red);   border: 1px solid rgba(255,63,91,0.2); display: block; }
 
   /* ── LAYOUT ── */
   main { padding: 28px 32px; max-width: 1600px; margin: 0 auto; }
@@ -161,13 +161,17 @@
   /* ── CLIENT TABLE ── */
   .client-table { width: 100%; border-collapse: collapse; }
   .client-table th { font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; text-align: left; padding: 0 0 10px 0; border-bottom: 1px solid var(--border); }
-  .client-table td { font-family: var(--font-mono); font-size: 0.72rem; padding: 9px 0; border-bottom: 1px solid rgba(26,35,50,0.5); color: var(--text); }
+  .client-table td { font-family: var(--font-mono); font-size: 0.72rem; padding: 9px 0; border-bottom: 1px solid rgba(26,35,50,0.5); color: var(--text); vertical-align: middle; }
   .client-table td.ip           { color: var(--blue); }
   .client-table td.blocked-cell { color: var(--red); }
   .client-table td.allowed-cell { color: var(--green); }
   .mini-bar-wrap { display: flex; align-items: center; gap: 8px; }
   .mini-bar      { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
   .mini-bar-inner { height: 100%; background: var(--red); border-radius: 2px; transition: width 0.6s ease; }
+
+  /* ── CLIENT ACTION FEEDBACK ── */
+  .client-action-cell { display: flex; flex-direction: column; gap: 4px; }
+  .client-error { font-family: var(--font-mono); font-size: 0.56rem; color: var(--red); max-width: 110px; word-break: break-word; }
 
   /* ── RECENT QUERIES ── */
   .query-row { display: grid; grid-template-columns: 70px 1fr 120px 160px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(26,35,50,0.4); font-family: var(--font-mono); font-size: 0.68rem; }
@@ -288,7 +292,7 @@
         <thead>
           <tr>
             <th>IP Address</th><th>Total</th><th>Allowed</th>
-            <th>Blocked</th><th style="width:80px">Block %</th><th style="width:110px">Action</th>
+            <th>Blocked</th><th style="width:80px">Block %</th><th style="width:140px">Action</th>
           </tr>
         </thead>
         <tbody id="client-tbody"></tbody>
@@ -332,15 +336,36 @@
 let timelineChart, statusChart;
 let alertCount = 0;
 let alertLogEntries = [];
+// Populated from /api/blocked-clients on boot so state survives page refresh
 let blockedClients = new Set();
 let lastRecentDomain = null;
 
 const fmt = n => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : n;
 
+// ── SAFE TEXT HELPER ──────────────────────────
+// Prevents XSS by escaping HTML special chars before
+// inserting any server-provided string into innerHTML.
+function esc(str) {
+  const d = document.createElement("div");
+  d.textContent = String(str ?? "");
+  return d.innerHTML;
+}
+
 function badgeClass(status) {
   if (status.includes("Block")) return "blocked";
   if (status.includes("Cache") || status.includes("Stale") || status.includes("Expired")) return "cached";
   return "allowed";
+}
+
+// ── BOOT: load real blocked-client state ──────
+async function loadBlockedClients() {
+  try {
+    const res = await fetch("/api/blocked-clients");
+    const d = await res.json();
+    blockedClients = new Set(d.blocked_clients || []);
+  } catch (e) {
+    console.warn("Could not load blocked clients:", e);
+  }
 }
 
 // ── SSE STATS STREAM ──────────────────────────
@@ -358,6 +383,10 @@ function connectStatsStream() {
     renderStatusPie(d.status_dist);
     renderBarList("top-blocked", d.top_blocked, "red");
     renderBarList("top-allowed", d.top_allowed, "green");
+    // Merge server-side blocked state with local set on each update
+    if (d.blocked_clients) {
+      d.blocked_clients.forEach(ip => blockedClients.add(ip));
+    }
     renderClients(d.client_data);
     renderRecent(d.recent);
     document.getElementById("loading").classList.add("hidden");
@@ -367,6 +396,8 @@ function connectStatsStream() {
     pill.textContent = "● OFFLINE";
     pill.className = "status-pill disconnected";
     document.getElementById("last-updated").textContent = "reconnecting...";
+    // Hide loading screen even if the first connect failed
+    document.getElementById("loading").classList.add("hidden");
     es.close();
     setTimeout(connectStatsStream, 4000);
   };
@@ -396,17 +427,18 @@ function showToast(alert) {
   const statusClass = alert.blocked ? "was-blocked" : "was-allowed";
   const statusText  = alert.blocked ? "DNS BLOCKED" : "⚠ ACCESSED — NOT BLOCKED";
 
+  // Use esc() for all server-provided values to prevent XSS
   toast.innerHTML = `
     <div class="toast-header">
       <span class="toast-title">⚠ WATCHLIST HIT</span>
-      <span class="toast-time">${alert.timestamp}</span>
+      <span class="toast-time">${esc(alert.timestamp)}</span>
     </div>
-    <div class="toast-domain">${alert.domain}</div>
-    <div class="toast-client">from ${alert.client}</div>
+    <div class="toast-domain">${esc(alert.domain)}</div>
+    <div class="toast-client">from ${esc(alert.client)}</div>
     <span class="toast-status ${statusClass}">${statusText}</span>
     <div class="toast-actions">
-      <button class="btn btn-allow"   onclick="toastAllow('${alert.domain}', ${alert.id})">✓ ALLOW DOMAIN</button>
-      <button class="btn btn-block"   onclick="toastBlock('${alert.client}', ${alert.id})">✕ BLOCK CLIENT</button>
+      <button class="btn btn-allow"   onclick="toastAllow('${esc(alert.domain)}', ${alert.id})">✓ ALLOW DOMAIN</button>
+      <button class="btn btn-block"   onclick="toastBlock('${esc(alert.client)}', ${alert.id})">✕ BLOCK CLIENT</button>
       <button class="btn btn-dismiss" onclick="dismissToast(${alert.id})">DISMISS</button>
     </div>
     <div class="toast-result" id="toast-result-${alert.id}"></div>
@@ -426,22 +458,30 @@ function dismissToast(id) {
 }
 
 async function toastAllow(domain, id) {
-  const res = await fetch("/api/action/allow", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({domain}) });
+  const res = await fetch("/api/action/allow", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({domain})
+  });
   const d = await res.json();
   const el = document.getElementById(`toast-result-${id}`);
-  el.style.display = "block";
   el.className = d.ok ? "toast-result ok" : "toast-result err";
   el.textContent = d.ok ? `✓ ${domain} added to allowlist` : `✕ Error: ${d.error}`;
   logAlertAction(id, "ALLOWED");
 }
 
 async function toastBlock(clientIp, id) {
-  const res = await fetch("/api/action/block", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({client: clientIp}) });
+  const res = await fetch("/api/action/block", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({client: clientIp})
+  });
   const d = await res.json();
   const el = document.getElementById(`toast-result-${id}`);
-  el.style.display = "block";
   el.className = d.ok ? "toast-result ok" : "toast-result err";
-  el.textContent = d.ok ? `✕ ${clientIp} blocked via iptables` : `✕ Error: ${d.error}`;
+  el.textContent = d.ok
+    ? `✕ ${clientIp} blocked (DNS port 53 dropped)`
+    : `✕ Error: ${d.error}`;
   if (d.ok) blockedClients.add(clientIp);
   logAlertAction(id, "BLOCKED");
 }
@@ -462,10 +502,10 @@ function renderAlertLog() {
   if (!alertLogEntries.length) return;
   el.innerHTML = alertLogEntries.slice(0, 20).map(e => `
     <div class="alert-log-row">
-      <span class="al-time">${e.timestamp}</span>
-      <span class="al-domain" title="${e.domain}">${e.domain}</span>
-      <span class="al-client">${e.client}</span>
-      <span class="al-action" style="color:${e.action==='BLOCKED'?'var(--red)':e.action==='ALLOWED'?'var(--green)':'var(--muted)'}">${e.action}</span>
+      <span class="al-time">${esc(e.timestamp)}</span>
+      <span class="al-domain" title="${esc(e.domain)}">${esc(e.domain)}</span>
+      <span class="al-client">${esc(e.client)}</span>
+      <span class="al-action" style="color:${e.action==='BLOCKED'?'var(--red)':e.action==='ALLOWED'?'var(--green)':'var(--muted)'}">${esc(e.action)}</span>
     </div>
   `).join("");
   el.scrollTop = 0;
@@ -475,7 +515,7 @@ function renderAlertLog() {
 function renderWatchlist(list) {
   document.getElementById("watchlist-tags").innerHTML = list.map(d => `
     <div class="wl-tag">
-      ${d} <span class="wl-remove" onclick="removeFromWatchlist('${d}')">✕</span>
+      ${esc(d)} <span class="wl-remove" onclick="removeFromWatchlist('${esc(d)}')">✕</span>
     </div>
   `).join("");
 }
@@ -484,17 +524,27 @@ async function addToWatchlist() {
   const input = document.getElementById("wl-input");
   const domain = input.value.trim().toLowerCase();
   if (!domain) return;
-  const res = await fetch("/api/watchlist/add", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({domain}) });
+  const res = await fetch("/api/watchlist/add", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({domain})
+  });
   renderWatchlist((await res.json()).watchlist);
   input.value = "";
 }
 
 async function removeFromWatchlist(domain) {
-  const res = await fetch("/api/watchlist/remove", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({domain}) });
+  const res = await fetch("/api/watchlist/remove", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({domain})
+  });
   renderWatchlist((await res.json()).watchlist);
 }
 
-document.getElementById("wl-input").addEventListener("keydown", e => { if (e.key === "Enter") addToWatchlist(); });
+document.getElementById("wl-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") addToWatchlist();
+});
 
 // ── RENDER FUNCTIONS ──────────────────────────
 function renderStats(d) {
@@ -563,7 +613,7 @@ function renderBarList(id, items, color) {
   document.getElementById(id).innerHTML = items.map(item => `
     <div class="bar-item">
       <div class="bar-row">
-        <span class="bar-domain" title="${item.domain}">${item.domain}</span>
+        <span class="bar-domain" title="${esc(item.domain)}">${esc(item.domain)}</span>
         <span class="bar-count">${item.count.toLocaleString()}</span>
       </div>
       <div class="bar-track"><div class="bar-fill ${color}" style="width:${(item.count/max*100).toFixed(1)}%"></div></div>
@@ -576,10 +626,10 @@ function renderClients(clients) {
     const rate = c.total ? (c.blocked / c.total * 100).toFixed(1) : 0;
     const isBlocked = blockedClients.has(c.client);
     const btn = isBlocked
-      ? `<button class="btn btn-unblock" onclick="clientUnblock('${c.client}', this)">↑ UNBLOCK</button>`
-      : `<button class="btn btn-block"   onclick="clientBlock('${c.client}', this)">✕ BLOCK</button>`;
+      ? `<button class="btn btn-unblock" onclick="clientUnblock('${esc(c.client)}', this)">↑ UNBLOCK</button>`
+      : `<button class="btn btn-block"   onclick="clientBlock('${esc(c.client)}', this)">✕ BLOCK</button>`;
     return `<tr>
-      <td class="ip">${c.client}${isBlocked ? ' <span style="font-size:0.55rem;color:var(--red)">●</span>' : ''}</td>
+      <td class="ip">${esc(c.client)}${isBlocked ? ' <span style="font-size:0.55rem;color:var(--red)">●</span>' : ''}</td>
       <td>${c.total.toLocaleString()}</td>
       <td class="allowed-cell">${c.allowed.toLocaleString()}</td>
       <td class="blocked-cell">${c.blocked.toLocaleString()}</td>
@@ -589,24 +639,73 @@ function renderClients(clients) {
           <span style="font-size:0.62rem;color:var(--muted)">${rate}%</span>
         </div>
       </td>
-      <td>${btn}</td>
+      <td>
+        <div class="client-action-cell">
+          ${btn}
+          <span class="client-error" id="client-err-${esc(c.client).replace(/\./g,'_')}"></span>
+        </div>
+      </td>
     </tr>`;
   }).join("");
 }
 
+function setClientError(ip, msg) {
+  const id = "client-err-" + ip.replace(/\./g, '_');
+  const el = document.getElementById(id);
+  if (el) el.textContent = msg;
+}
+
 async function clientBlock(ip, btn) {
-  btn.disabled = true; btn.textContent = "...";
-  const d = await (await fetch("/api/action/block", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({client:ip}) })).json();
-  if (d.ok) { blockedClients.add(ip); btn.className="btn btn-unblock"; btn.textContent="↑ UNBLOCK"; btn.onclick = () => clientUnblock(ip, btn); }
-  else { btn.textContent = "ERROR"; }
+  btn.disabled = true;
+  btn.textContent = "...";
+  setClientError(ip, "");
+  try {
+    const res = await fetch("/api/action/block", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({client: ip})
+    });
+    const d = await res.json();
+    if (d.ok) {
+      blockedClients.add(ip);
+      btn.className = "btn btn-unblock";
+      btn.textContent = "↑ UNBLOCK";
+      btn.onclick = () => clientUnblock(ip, btn);
+    } else {
+      btn.textContent = "✕ BLOCK";
+      setClientError(ip, d.error || "failed");
+    }
+  } catch (e) {
+    btn.textContent = "✕ BLOCK";
+    setClientError(ip, "network error");
+  }
   btn.disabled = false;
 }
 
 async function clientUnblock(ip, btn) {
-  btn.disabled = true; btn.textContent = "...";
-  const d = await (await fetch("/api/action/unblock", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({client:ip}) })).json();
-  if (d.ok) { blockedClients.delete(ip); btn.className="btn btn-block"; btn.textContent="✕ BLOCK"; btn.onclick = () => clientBlock(ip, btn); }
-  else { btn.textContent = "ERROR"; }
+  btn.disabled = true;
+  btn.textContent = "...";
+  setClientError(ip, "");
+  try {
+    const res = await fetch("/api/action/unblock", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({client: ip})
+    });
+    const d = await res.json();
+    if (d.ok) {
+      blockedClients.delete(ip);
+      btn.className = "btn btn-block";
+      btn.textContent = "✕ BLOCK";
+      btn.onclick = () => clientBlock(ip, btn);
+    } else {
+      btn.textContent = "↑ UNBLOCK";
+      setClientError(ip, d.error || "failed");
+    }
+  } catch (e) {
+    btn.textContent = "↑ UNBLOCK";
+    setClientError(ip, "network error");
+  }
   btn.disabled = false;
 }
 
@@ -616,17 +715,20 @@ function renderRecent(queries) {
   lastRecentDomain = firstDomain;
   document.getElementById("recent-list").innerHTML = queries.map((q, i) => `
     <div class="query-row${q.blocked ? ' is-blocked' : ''}${i === 0 && isNew ? ' flash-new' : ''}">
-      <span class="q-time">${q.time}</span>
-      <span class="q-domain" title="${q.domain}">${q.domain}</span>
-      <span class="q-client">${q.client}</span>
+      <span class="q-time">${esc(q.time)}</span>
+      <span class="q-domain" title="${esc(q.domain)}">${esc(q.domain)}</span>
+      <span class="q-client">${esc(q.client)}</span>
       <span class="q-status"><span class="badge ${badgeClass(q.status)}">${q.blocked ? "BLOCKED" : q.status.includes("Cache") ? "CACHED" : "ALLOWED"}</span></span>
     </div>
   `).join("");
 }
 
 // ── BOOT ──────────────────────────────────────
-connectStatsStream();
-connectAlertStream();
+// Load real blocked state first, then start streams
+loadBlockedClients().then(() => {
+  connectStatsStream();
+  connectAlertStream();
+});
 </script>
 </body>
 </html>

@@ -1,6 +1,11 @@
+
 # Pi-hole as a Network-Level Incident Response Tool
 
 ### Live Dashboard with Real-Time DNS Monitoring and Client Enforcement
+
+> 📸 **[HERO SCREENSHOT — Full dashboard in browser, all panels visible with live data populated. Ideally taken during active network traffic so numbers are real and the recent queries feed is full. Landscape crop, as wide as possible.]**
+
+---
 
 ## 1. Project Overview
 
@@ -80,6 +85,8 @@ pihole.log (new line)
 | DNS Allowlisting    | `pihole allowlist`CLI        | Domain allowlisting via subprocess call                 |
 | Remote Dev          | VS Code Remote SSH             | Development directly on the Raspberry Pi                |
 
+> 📸 **[VS CODE SCREENSHOT — VS Code with the Remote SSH connection open to the Pi (the green "SSH: 192.168.0.2" bar visible in the bottom-left corner), with App.py or index.html open in the editor. This is exactly what you uploaded earlier — that screenshot is perfect for this spot.]**
+
 ---
 
 ## 5. Dashboard Features
@@ -91,6 +98,8 @@ pihole.log (new line)
 * Block rate color-coded: green (normal), yellow (elevated >15%), red (high >30%)
 * "Updated" timestamp reflects the moment of the last push from the server
 
+> 📸 **[SCREENSHOT — Stat cards row at the top of the dashboard. Best taken when block rate is elevated so the red color-coding is visible. Crop tightly to just the five cards.]**
+
 ### Query Volume Timeline
 
 * Hourly chart of allowed vs. blocked queries
@@ -101,12 +110,16 @@ pihole.log (new line)
 * Doughnut chart breaking down query outcomes by Pi-hole status code
 * Color-coded: blocked (red), cached (blue), allowed (green)
 
+> 📸 **[SCREENSHOT — The two chart panels side by side: the timeline on the left showing a visible spike in blocked traffic, and the doughnut chart on the right. If you can generate a spike by querying blocked domains repeatedly with nslookup right before screenshotting, the timeline will look much more interesting.]**
+
 ### Client Activity Table
 
 * Per-device breakdown: total, allowed, blocked, block percentage with mini bar
 * **Block** button: immediately adds an iptables `FORWARD DROP` rule for that IP
 * **Unblock** button: removes the iptables rule
 * Blocked clients marked with a red indicator that persists across re-renders
+
+> 📸 **[SCREENSHOT — Client activity table with at least 2-3 devices visible. Ideally one client has been blocked so the red ● indicator and UNBLOCK button are visible in the same shot. This demonstrates the containment capability clearly.]**
 
 ### Top Blocked / Top Allowed Domains
 
@@ -118,6 +131,8 @@ pihole.log (new line)
 * Last 50 DNS queries with timestamp, domain, client IP, and status badge
 * Blocked rows highlighted in red
 * New queries flash green on arrival so activity is visible at a glance
+
+> 📸 **[SCREENSHOT — Recent queries feed scrolled to the top, showing a mix of red-highlighted blocked rows and normal allowed rows. The contrast between the red blocked entries and the rest makes the feed look great and tells the story immediately.]**
 
 ### Watchlist Manager
 
@@ -132,6 +147,8 @@ pihole.log (new line)
 * One-click actions from the toast: **Allow Domain** (adds to Pi-hole allowlist) or **Block Client** (iptables DROP)
 * Alerts auto-dismiss after 30 seconds; logged to the Alert Log panel
 
+> 📸 **[SCREENSHOT — This is the money shot. Trigger it by running `nslookup chatgpt.com [your-pi-ip]` or `nslookup tiktok.com [your-pi-ip]` from another device or terminal while the dashboard is open. The red toast notification will pop up in the top-right corner. Capture it before it dismisses. Shows the real-time alerting working end-to-end.]**
+
 ### Alert Log
 
 * Persistent in-session log of all watchlist hits
@@ -143,6 +160,8 @@ pihole.log (new line)
 
 ### Prerequisites
 
+bash
+
 ```bash
 # On the Raspberry Pi, inside the Pi-hole working directory
 pip3 install flask --break-system-packages
@@ -150,11 +169,15 @@ pip3 install flask --break-system-packages
 
 ### Start
 
+bash
+
 ```bash
 sudo python3 App.py
 ```
 
 `sudo` is required for iptables access. The watcher thread starts automatically and begins tailing the Pi-hole log.
+
+> 📸 **[TERMINAL SCREENSHOT — The VS Code integrated terminal (or SSH session) showing the app starting up: the `[*] Watcher watching: /var/log/pihole/pihole.log` line, and ideally a few `[!] WATCHLIST HIT` lines below it from triggered alerts. Shows the backend working.]**
 
 ### Access
 
@@ -217,11 +240,11 @@ http://192.168.0.2:5000
 
 ## 10. Resources
 
-* Pi-hole Documentation: https://docs.pi-hole.net/
-* Pi-hole Docker Setup: https://github.com/pi-hole/docker-pi-hole
-* Flask Documentation: https://flask.palletsprojects.com/
-* Server-Sent Events (MDN): https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events
-* Chart.js Documentation: https://www.chartjs.org/docs/
-* iptables man page: https://linux.die.net/man/8/iptables
-* NIST SP 800-61 (Incident Handling Guide): https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-61r2.pdf
-* DNS Sinkholes Explained: https://www.sans.org/white-papers/33523/
+* Pi-hole Documentation: [https://docs.pi-hole.net/](https://docs.pi-hole.net/)
+* Pi-hole Docker Setup: [https://github.com/pi-hole/docker-pi-hole](https://github.com/pi-hole/docker-pi-hole)
+* Flask Documentation: [https://flask.palletsprojects.com/](https://flask.palletsprojects.com/)
+* Server-Sent Events (MDN): [https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events)
+* Chart.js Documentation: [https://www.chartjs.org/docs/](https://www.chartjs.org/docs/)
+* iptables man page: [https://linux.die.net/man/8/iptables](https://linux.die.net/man/8/iptables)
+* NIST SP 800-61 (Incident Handling Guide): [https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-61r2.pdf](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-61r2.pdf)
+* DNS Sinkholes Explained: [https://www.sans.org/white-papers/33523/](https://www.sans.org/white-papers/33523/)

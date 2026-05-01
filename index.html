@@ -8,16 +8,16 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
   :root {
-    --bg:       #080c10;
-    --surface:  #0d1117;
-    --border:   #1a2332;
-    --green:    #00ff88;
-    --red:      #ff3f5b;
-    --blue:     #00b4ff;
-    --yellow:   #ffd600;
-    --dim:      #3a4a5a;
-    --text:     #c8d8e8;
-    --muted:    #5a7a8a;
+    --bg:        #080c10;
+    --surface:   #0d1117;
+    --border:    #1a2332;
+    --green:     #00ff88;
+    --red:       #ff3f5b;
+    --blue:      #00b4ff;
+    --yellow:    #ffd600;
+    --dim:       #3a4a5a;
+    --text:      #c8d8e8;
+    --muted:     #5a7a8a;
     --font-mono: 'Share Tech Mono', monospace;
     --font-ui:   'Exo 2', sans-serif;
   }
@@ -34,8 +34,7 @@
 
   body::before {
     content: '';
-    position: fixed;
-    inset: 0;
+    position: fixed; inset: 0;
     background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px);
     pointer-events: none;
     z-index: 9999;
@@ -43,84 +42,63 @@
 
   /* ── HEADER ── */
   header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    display: flex; align-items: center; justify-content: space-between;
     padding: 18px 32px;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
-    position: sticky;
-    top: 0;
-    z-index: 200;
+    position: sticky; top: 0; z-index: 200;
   }
 
   .logo { font-family: var(--font-mono); font-size: 1.1rem; color: var(--green); letter-spacing: 0.15em; text-shadow: 0 0 12px rgba(0,255,136,0.5); }
   .logo span { color: var(--muted); }
-
   .header-right { display: flex; align-items: center; gap: 20px; }
 
-  .status-pill { font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.1em; color: var(--green); border: 1px solid var(--green); padding: 4px 12px; border-radius: 2px; text-shadow: 0 0 8px rgba(0,255,136,0.5); animation: pulse-border 2s infinite; }
-  @keyframes pulse-border { 0%,100%{box-shadow:0 0 4px rgba(0,255,136,0.3)} 50%{box-shadow:0 0 12px rgba(0,255,136,0.6)} }
+  .status-pill {
+    font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.1em;
+    color: var(--green); border: 1px solid var(--green); padding: 4px 12px; border-radius: 2px;
+    text-shadow: 0 0 8px rgba(0,255,136,0.5); animation: pulse-border 2s infinite;
+  }
   .status-pill.disconnected { color: var(--red); border-color: var(--red); text-shadow: 0 0 8px rgba(255,63,91,0.5); animation: none; }
+  @keyframes pulse-border { 0%,100%{box-shadow:0 0 4px rgba(0,255,136,0.3)} 50%{box-shadow:0 0 12px rgba(0,255,136,0.6)} }
 
   .alert-bell {
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    letter-spacing: 0.1em;
-    color: var(--yellow);
-    border: 1px solid var(--yellow);
-    padding: 4px 12px;
-    border-radius: 2px;
-    cursor: pointer;
-    display: none;
-    animation: bell-pulse 0.5s ease infinite alternate;
+    font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.1em;
+    color: var(--yellow); border: 1px solid var(--yellow); padding: 4px 12px; border-radius: 2px;
+    cursor: pointer; display: none; animation: bell-pulse 0.5s ease infinite alternate;
   }
   .alert-bell.visible { display: block; }
   @keyframes bell-pulse { from{box-shadow:0 0 4px rgba(255,214,0,0.3)} to{box-shadow:0 0 16px rgba(255,214,0,0.8)} }
 
   .last-updated { font-family: var(--font-mono); font-size: 0.65rem; color: var(--muted); }
 
-  /* ── ALERT TOAST STACK ── */
+  /* ── TOAST STACK ── */
   #alert-stack {
-    position: fixed;
-    top: 80px;
-    right: 24px;
-    z-index: 500;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    max-width: 420px;
-    width: 100%;
+    position: fixed; top: 80px; right: 24px; z-index: 500;
+    display: flex; flex-direction: column; gap: 12px;
+    max-width: 420px; width: 100%;
   }
 
   .alert-toast {
-    background: #0f1923;
-    border: 1px solid var(--red);
-    border-left: 4px solid var(--red);
-    padding: 16px 18px;
-    box-shadow: 0 0 24px rgba(255,63,91,0.3);
+    background: #0f1923; border: 1px solid var(--red); border-left: 4px solid var(--red);
+    padding: 16px 18px; box-shadow: 0 0 24px rgba(255,63,91,0.3);
     animation: toastIn 0.3s cubic-bezier(0.16,1,0.3,1);
-    position: relative;
   }
-
-  @keyframes toastIn {
-    from { opacity:0; transform: translateX(30px); }
-    to   { opacity:1; transform: translateX(0); }
-  }
+  @keyframes toastIn { from{opacity:0;transform:translateX(30px)} to{opacity:1;transform:translateX(0)} }
 
   .toast-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-  .toast-title { font-family: var(--font-mono); font-size: 0.65rem; letter-spacing: 0.15em; color: var(--red); text-shadow: 0 0 8px rgba(255,63,91,0.5); }
-  .toast-time { font-family: var(--font-mono); font-size: 0.62rem; color: var(--muted); }
+  .toast-title  { font-family: var(--font-mono); font-size: 0.65rem; letter-spacing: 0.15em; color: var(--red); text-shadow: 0 0 8px rgba(255,63,91,0.5); }
+  .toast-time   { font-family: var(--font-mono); font-size: 0.62rem; color: var(--muted); }
   .toast-domain { font-family: var(--font-mono); font-size: 0.85rem; color: var(--text); margin-bottom: 4px; word-break: break-all; }
   .toast-client { font-family: var(--font-mono); font-size: 0.7rem; color: var(--blue); margin-bottom: 14px; }
 
   .toast-status { display: inline-block; font-family: var(--font-mono); font-size: 0.6rem; padding: 2px 8px; border-radius: 2px; margin-bottom: 14px; }
-  .toast-status.was-blocked { background: rgba(255,63,91,0.15); color: var(--red); border: 1px solid rgba(255,63,91,0.3); }
-  .toast-status.was-allowed { background: rgba(255,214,0,0.1); color: var(--yellow); border: 1px solid rgba(255,214,0,0.3); }
+  .toast-status.was-blocked { background: rgba(255,63,91,0.15);  color: var(--red);    border: 1px solid rgba(255,63,91,0.3); }
+  .toast-status.was-allowed { background: rgba(255,214,0,0.1);   color: var(--yellow); border: 1px solid rgba(255,214,0,0.3); }
 
   .toast-actions { display: flex; gap: 8px; }
 
   .btn { font-family: var(--font-mono); font-size: 0.65rem; letter-spacing: 0.1em; padding: 6px 14px; border: 1px solid; background: transparent; cursor: pointer; border-radius: 2px; transition: all 0.15s; }
+  .btn:disabled { opacity: 0.5; cursor: default; }
   .btn-allow   { color: var(--green); border-color: var(--green); }
   .btn-allow:hover   { background: rgba(0,255,136,0.1); box-shadow: 0 0 8px rgba(0,255,136,0.3); }
   .btn-block   { color: var(--red);   border-color: var(--red); }
@@ -130,7 +108,7 @@
   .btn-dismiss { color: var(--muted); border-color: var(--dim); }
   .btn-dismiss:hover { background: rgba(255,255,255,0.04); }
 
-  .toast-result { font-family: var(--font-mono); font-size: 0.65rem; margin-top: 8px; padding: 6px 10px; border-radius: 2px; }
+  .toast-result { font-family: var(--font-mono); font-size: 0.65rem; margin-top: 8px; padding: 6px 10px; border-radius: 2px; display: none; }
   .toast-result.ok  { background: rgba(0,255,136,0.08); color: var(--green); border: 1px solid rgba(0,255,136,0.2); }
   .toast-result.err { background: rgba(255,63,91,0.08); color: var(--red);   border: 1px solid rgba(255,63,91,0.2); }
 
@@ -140,21 +118,19 @@
   /* ── STAT CARDS ── */
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
 
-  .stat-card { background: var(--surface); border: 1px solid var(--border); padding: 22px 24px; position: relative; overflow: hidden; animation: fadeUp 0.4s ease both; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); padding: 22px 24px; position: relative; overflow: hidden; }
   .stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
   .stat-card.green::before  { background: var(--green);  box-shadow: 0 0 8px var(--green); }
   .stat-card.red::before    { background: var(--red);    box-shadow: 0 0 8px var(--red); }
   .stat-card.blue::before   { background: var(--blue);   box-shadow: 0 0 8px var(--blue); }
-  .stat-card.yellow::before { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
   .stat-card.dim::before    { background: var(--dim); }
 
   .stat-label { font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.15em; color: var(--muted); text-transform: uppercase; margin-bottom: 10px; }
-  .stat-value { font-family: var(--font-mono); font-size: 2.2rem; font-weight: 400; line-height: 1; transition: color 0.3s; }
-  .stat-card.green  .stat-value { color: var(--green);  text-shadow: 0 0 16px rgba(0,255,136,0.4); }
-  .stat-card.red    .stat-value { color: var(--red);    text-shadow: 0 0 16px rgba(255,63,91,0.4); }
-  .stat-card.blue   .stat-value { color: var(--blue);   text-shadow: 0 0 16px rgba(0,180,255,0.4); }
-  .stat-card.yellow .stat-value { color: var(--yellow); text-shadow: 0 0 16px rgba(255,214,0,0.4); }
-  .stat-card.dim    .stat-value { color: var(--text); }
+  .stat-value { font-family: var(--font-mono); font-size: 2.2rem; font-weight: 400; line-height: 1; }
+  .stat-card.green .stat-value { color: var(--green); text-shadow: 0 0 16px rgba(0,255,136,0.4); }
+  .stat-card.red   .stat-value { color: var(--red);   text-shadow: 0 0 16px rgba(255,63,91,0.4); }
+  .stat-card.blue  .stat-value { color: var(--blue);  text-shadow: 0 0 16px rgba(0,180,255,0.4); }
+  .stat-card.dim   .stat-value { color: var(--text); }
   .stat-sub { font-family: var(--font-mono); font-size: 0.65rem; color: var(--muted); margin-top: 6px; transition: color 0.3s; }
   .stat-sub.rate-low    { color: var(--green); }
   .stat-sub.rate-medium { color: var(--yellow); }
@@ -165,7 +141,7 @@
   .col-2 { grid-template-columns: 2fr 1fr; }
   .col-3 { grid-template-columns: 2fr 1fr 1fr; }
 
-  .panel { background: var(--surface); border: 1px solid var(--border); padding: 20px 22px; animation: fadeUp 0.5s ease both; }
+  .panel { background: var(--surface); border: 1px solid var(--border); padding: 20px 22px; }
   .panel-title { font-family: var(--font-mono); font-size: 0.65rem; letter-spacing: 0.18em; color: var(--muted); text-transform: uppercase; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }
   .panel-title::after { content:''; flex:1; height:1px; background: var(--border); }
 
@@ -174,11 +150,11 @@
   /* ── BAR LISTS ── */
   .bar-list { display: flex; flex-direction: column; gap: 10px; }
   .bar-item { display: flex; flex-direction: column; gap: 4px; }
-  .bar-row { display: flex; justify-content: space-between; align-items: baseline; }
+  .bar-row  { display: flex; justify-content: space-between; align-items: baseline; }
   .bar-domain { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 65%; }
-  .bar-count { font-family: var(--font-mono); font-size: 0.68rem; color: var(--muted); }
-  .bar-track { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
-  .bar-fill { height: 100%; border-radius: 2px; transition: width 0.6s cubic-bezier(0.16,1,0.3,1); }
+  .bar-count  { font-family: var(--font-mono); font-size: 0.68rem; color: var(--muted); }
+  .bar-track  { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .bar-fill   { height: 100%; border-radius: 2px; transition: width 0.6s cubic-bezier(0.16,1,0.3,1); }
   .bar-fill.red   { background: var(--red);   box-shadow: 0 0 6px rgba(255,63,91,0.5); }
   .bar-fill.green { background: var(--green); box-shadow: 0 0 6px rgba(0,255,136,0.5); }
 
@@ -186,40 +162,41 @@
   .client-table { width: 100%; border-collapse: collapse; }
   .client-table th { font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; text-align: left; padding: 0 0 10px 0; border-bottom: 1px solid var(--border); }
   .client-table td { font-family: var(--font-mono); font-size: 0.72rem; padding: 9px 0; border-bottom: 1px solid rgba(26,35,50,0.5); color: var(--text); }
-  .client-table td.ip { color: var(--blue); }
+  .client-table td.ip           { color: var(--blue); }
   .client-table td.blocked-cell { color: var(--red); }
   .client-table td.allowed-cell { color: var(--green); }
   .mini-bar-wrap { display: flex; align-items: center; gap: 8px; }
-  .mini-bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .mini-bar      { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
   .mini-bar-inner { height: 100%; background: var(--red); border-radius: 2px; transition: width 0.6s ease; }
 
   /* ── RECENT QUERIES ── */
-  .query-row { display: grid; grid-template-columns: 70px 1fr 120px 160px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(26,35,50,0.4); font-family: var(--font-mono); font-size: 0.68rem; transition: background 0.15s; }
+  .query-row { display: grid; grid-template-columns: 70px 1fr 120px 160px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(26,35,50,0.4); font-family: var(--font-mono); font-size: 0.68rem; }
   .query-row:hover { background: rgba(255,255,255,0.02); }
   .query-row.is-blocked { background: rgba(255,63,91,0.04); }
   .query-row.is-blocked .q-domain { color: var(--red); }
   .query-row.flash-new { animation: flashNew 0.8s ease; }
   @keyframes flashNew { 0%{background:rgba(0,255,136,0.12)} 100%{background:transparent} }
-  .q-time { color: var(--muted); }
+  .q-time   { color: var(--muted); }
   .q-domain { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .q-client { color: var(--blue); }
   .q-status { text-align: right; }
+
   .badge { display: inline-block; padding: 2px 8px; border-radius: 2px; font-size: 0.6rem; letter-spacing: 0.08em; }
   .badge.blocked { background: rgba(255,63,91,0.15); color: var(--red);   border: 1px solid rgba(255,63,91,0.3); }
   .badge.allowed { background: rgba(0,255,136,0.08); color: var(--green); border: 1px solid rgba(0,255,136,0.2); }
   .badge.cached  { background: rgba(0,180,255,0.08); color: var(--blue);  border: 1px solid rgba(0,180,255,0.2); }
 
-  /* ── WATCHLIST MANAGER ── */
+  /* ── WATCHLIST ── */
   .watchlist-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
   .wl-tag { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 0.68rem; color: var(--yellow); border: 1px solid rgba(255,214,0,0.3); background: rgba(255,214,0,0.05); padding: 4px 10px; border-radius: 2px; }
-  .wl-remove { cursor: pointer; color: var(--muted); font-size: 0.8rem; line-height: 1; }
+  .wl-remove { cursor: pointer; color: var(--muted); font-size: 0.8rem; }
   .wl-remove:hover { color: var(--red); }
   .wl-add-row { display: flex; gap: 8px; }
   .wl-input { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono); font-size: 0.75rem; padding: 7px 12px; border-radius: 2px; outline: none; }
   .wl-input:focus { border-color: var(--yellow); }
 
   /* ── ALERT LOG ── */
-  .alert-log { display: flex; flex-direction: column; gap: 0; max-height: 280px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .alert-log { display: flex; flex-direction: column; max-height: 280px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
   .alert-log::-webkit-scrollbar { width: 4px; }
   .alert-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
   .alert-log-row { display: grid; grid-template-columns: 70px 1fr 120px 100px; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(26,35,50,0.4); font-family: var(--font-mono); font-size: 0.68rem; align-items: center; }
@@ -227,9 +204,6 @@
   .al-domain { color: var(--yellow); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .al-client { color: var(--blue); }
   .al-action { text-align: right; font-size: 0.6rem; }
-
-  /* ── ANIMATIONS ── */
-  @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
 
   /* ── LOADING ── */
   #loading { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; z-index: 9998; transition: opacity 0.4s; }
@@ -277,7 +251,7 @@
     <div class="stat-card red">
       <div class="stat-label">// Blocked</div>
       <div class="stat-value" id="s-blocked">—</div>
-      <div class="stat-sub" id="s-rate">— block rate</div>
+      <div class="stat-sub" id="s-rate">—</div>
     </div>
     <div class="stat-card blue">
       <div class="stat-label">// Allowed</div>
@@ -311,7 +285,12 @@
     <div class="panel">
       <div class="panel-title">// Client Activity</div>
       <table class="client-table">
-        <thead><tr><th>IP Address</th><th>Total</th><th>Allowed</th><th>Blocked</th><th style="width:80px">Block %</th><th style="width:110px">Action</th></tr></thead>
+        <thead>
+          <tr>
+            <th>IP Address</th><th>Total</th><th>Allowed</th>
+            <th>Blocked</th><th style="width:80px">Block %</th><th style="width:110px">Action</th>
+          </tr>
+        </thead>
         <tbody id="client-tbody"></tbody>
       </table>
     </div>
@@ -356,7 +335,7 @@ let alertLogEntries = [];
 let blockedClients = new Set();
 let lastRecentDomain = null;
 
-const fmt = n => n >= 1000 ? (n/1000).toFixed(1)+'k' : n;
+const fmt = n => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : n;
 
 function badgeClass(status) {
   if (status.includes("Block")) return "blocked";
@@ -372,10 +351,8 @@ function connectStatsStream() {
   es.onmessage = (e) => {
     const d = JSON.parse(e.data);
     if (d.error) return;
-
     pill.textContent = "● LIVE";
     pill.className = "status-pill";
-
     renderStats(d);
     renderTimeline(d.timeline);
     renderStatusPie(d.status_dist);
@@ -407,17 +384,15 @@ function connectAlertStream() {
   es.onerror = () => setTimeout(connectAlertStream, 3000);
 }
 
-// ── TOAST ALERTS ──────────────────────────────
+// ── TOASTS ────────────────────────────────────
 function showToast(alert) {
   alertCount++;
   document.getElementById("alert-count").textContent = alertCount;
   document.getElementById("alert-bell").classList.add("visible");
 
-  const stack = document.getElementById("alert-stack");
   const toast = document.createElement("div");
   toast.className = "alert-toast";
   toast.id = `toast-${alert.id}`;
-
   const statusClass = alert.blocked ? "was-blocked" : "was-allowed";
   const statusText  = alert.blocked ? "DNS BLOCKED" : "⚠ ACCESSED — NOT BLOCKED";
 
@@ -430,25 +405,24 @@ function showToast(alert) {
     <div class="toast-client">from ${alert.client}</div>
     <span class="toast-status ${statusClass}">${statusText}</span>
     <div class="toast-actions">
-      <button class="btn btn-allow" onclick="toastAllow('${alert.domain}', ${alert.id})">✓ ALLOW DOMAIN</button>
-      <button class="btn btn-block" onclick="toastBlock('${alert.client}', ${alert.id})">✕ BLOCK CLIENT</button>
+      <button class="btn btn-allow"   onclick="toastAllow('${alert.domain}', ${alert.id})">✓ ALLOW DOMAIN</button>
+      <button class="btn btn-block"   onclick="toastBlock('${alert.client}', ${alert.id})">✕ BLOCK CLIENT</button>
       <button class="btn btn-dismiss" onclick="dismissToast(${alert.id})">DISMISS</button>
     </div>
-    <div class="toast-result" id="toast-result-${alert.id}" style="display:none"></div>
+    <div class="toast-result" id="toast-result-${alert.id}"></div>
   `;
 
-  stack.prepend(toast);
+  document.getElementById("alert-stack").prepend(toast);
   setTimeout(() => dismissToast(alert.id), 30000);
 }
 
 function dismissToast(id) {
   const t = document.getElementById(`toast-${id}`);
-  if (t) {
-    t.style.opacity = "0";
-    t.style.transform = "translateX(30px)";
-    t.style.transition = "all 0.3s";
-    setTimeout(() => t.remove(), 300);
-  }
+  if (!t) return;
+  t.style.opacity = "0";
+  t.style.transform = "translateX(30px)";
+  t.style.transition = "all 0.3s";
+  setTimeout(() => t.remove(), 300);
 }
 
 async function toastAllow(domain, id) {
@@ -472,6 +446,7 @@ async function toastBlock(clientIp, id) {
   logAlertAction(id, "BLOCKED");
 }
 
+// ── ALERT LOG ─────────────────────────────────
 function logAlert(alert) {
   alertLogEntries.unshift({...alert, action: "—"});
   renderAlertLog();
@@ -500,8 +475,7 @@ function renderAlertLog() {
 function renderWatchlist(list) {
   document.getElementById("watchlist-tags").innerHTML = list.map(d => `
     <div class="wl-tag">
-      ${d}
-      <span class="wl-remove" onclick="removeFromWatchlist('${d}')">✕</span>
+      ${d} <span class="wl-remove" onclick="removeFromWatchlist('${d}')">✕</span>
     </div>
   `).join("");
 }
@@ -511,22 +485,18 @@ async function addToWatchlist() {
   const domain = input.value.trim().toLowerCase();
   if (!domain) return;
   const res = await fetch("/api/watchlist/add", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({domain}) });
-  const d = await res.json();
-  renderWatchlist(d.watchlist);
+  renderWatchlist((await res.json()).watchlist);
   input.value = "";
 }
 
 async function removeFromWatchlist(domain) {
   const res = await fetch("/api/watchlist/remove", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({domain}) });
-  const d = await res.json();
-  renderWatchlist(d.watchlist);
+  renderWatchlist((await res.json()).watchlist);
 }
 
-document.getElementById("wl-input").addEventListener("keydown", e => {
-  if (e.key === "Enter") addToWatchlist();
-});
+document.getElementById("wl-input").addEventListener("keydown", e => { if (e.key === "Enter") addToWatchlist(); });
 
-// ── STATS RENDER ─────────────────────────────
+// ── RENDER FUNCTIONS ──────────────────────────
 function renderStats(d) {
   document.getElementById("s-total").textContent   = fmt(d.total);
   document.getElementById("s-blocked").textContent = fmt(d.blocked);
@@ -552,13 +522,12 @@ function renderTimeline(d) {
       data: {
         labels: d.map(r => r.label),
         datasets: [
-          { label:"Allowed", data: d.map(r=>r.allowed), borderColor:"#00ff88", backgroundColor:"rgba(0,255,136,0.08)", fill:true, tension:0.3, pointRadius:0, borderWidth:1.5 },
-          { label:"Blocked", data: d.map(r=>r.blocked), borderColor:"#ff3f5b", backgroundColor:"rgba(255,63,91,0.12)", fill:true, tension:0.3, pointRadius:0, borderWidth:1.5 }
+          { label:"Allowed", data:d.map(r=>r.allowed), borderColor:"#00ff88", backgroundColor:"rgba(0,255,136,0.08)", fill:true, tension:0.3, pointRadius:0, borderWidth:1.5 },
+          { label:"Blocked", data:d.map(r=>r.blocked), borderColor:"#ff3f5b", backgroundColor:"rgba(255,63,91,0.12)",  fill:true, tension:0.3, pointRadius:0, borderWidth:1.5 }
         ]
       },
       options: {
-        responsive:true, maintainAspectRatio:false,
-        animation: { duration: 300 },
+        responsive:true, maintainAspectRatio:false, animation:{duration:300},
         interaction:{mode:"index",intersect:false},
         plugins:{ legend:{ labels:{ color:"#5a7a8a", font:{family:"Share Tech Mono",size:10}, boxWidth:10 } } },
         scales:{
@@ -571,7 +540,7 @@ function renderTimeline(d) {
 }
 
 function renderStatusPie(d) {
-  const colors = d.map(s => s.label.includes("Block") ? "#ff3f5b" : s.label.includes("Cache")||s.label.includes("Stale") ? "#00b4ff" : "#00ff88");
+  const colors = d.map(s => s.label.includes("Block") ? "#ff3f5b" : s.label.includes("Cache") || s.label.includes("Stale") ? "#00b4ff" : "#00ff88");
   if (statusChart) {
     statusChart.data.labels = d.map(s => s.label);
     statusChart.data.datasets[0].data = d.map(s => s.count);
@@ -579,9 +548,9 @@ function renderStatusPie(d) {
     statusChart.update("none");
   } else {
     statusChart = new Chart(document.getElementById("status-chart"), {
-      type:"doughnut",
-      data:{ labels:d.map(s=>s.label), datasets:[{data:d.map(s=>s.count), backgroundColor:colors, borderWidth:0, hoverOffset:6}] },
-      options:{
+      type: "doughnut",
+      data: { labels:d.map(s=>s.label), datasets:[{data:d.map(s=>s.count), backgroundColor:colors, borderWidth:0, hoverOffset:6}] },
+      options: {
         responsive:true, maintainAspectRatio:false, cutout:"68%",
         plugins:{ legend:{ position:"bottom", labels:{color:"#5a7a8a",font:{family:"Share Tech Mono",size:9},boxWidth:8,padding:8} } }
       }
@@ -604,37 +573,40 @@ function renderBarList(id, items, color) {
 
 function renderClients(clients) {
   document.getElementById("client-tbody").innerHTML = clients.map(c => {
-    const rate = c.total ? (c.blocked/c.total*100).toFixed(1) : 0;
+    const rate = c.total ? (c.blocked / c.total * 100).toFixed(1) : 0;
     const isBlocked = blockedClients.has(c.client);
-    const actionBtn = isBlocked
+    const btn = isBlocked
       ? `<button class="btn btn-unblock" onclick="clientUnblock('${c.client}', this)">↑ UNBLOCK</button>`
       : `<button class="btn btn-block"   onclick="clientBlock('${c.client}', this)">✕ BLOCK</button>`;
     return `<tr>
-      <td class="ip">${c.client}${isBlocked ? ' <span style="font-size:0.55rem;color:var(--red);opacity:0.7">●</span>' : ''}</td>
+      <td class="ip">${c.client}${isBlocked ? ' <span style="font-size:0.55rem;color:var(--red)">●</span>' : ''}</td>
       <td>${c.total.toLocaleString()}</td>
       <td class="allowed-cell">${c.allowed.toLocaleString()}</td>
       <td class="blocked-cell">${c.blocked.toLocaleString()}</td>
-      <td><div class="mini-bar-wrap"><div class="mini-bar"><div class="mini-bar-inner" style="width:${rate}%"></div></div><span style="font-size:0.62rem;color:var(--muted)">${rate}%</span></div></td>
-      <td>${actionBtn}</td>
+      <td>
+        <div class="mini-bar-wrap">
+          <div class="mini-bar"><div class="mini-bar-inner" style="width:${rate}%"></div></div>
+          <span style="font-size:0.62rem;color:var(--muted)">${rate}%</span>
+        </div>
+      </td>
+      <td>${btn}</td>
     </tr>`;
   }).join("");
 }
 
 async function clientBlock(ip, btn) {
   btn.disabled = true; btn.textContent = "...";
-  const res = await fetch("/api/action/block", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({client: ip}) });
-  const d = await res.json();
+  const d = await (await fetch("/api/action/block", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({client:ip}) })).json();
   if (d.ok) { blockedClients.add(ip); btn.className="btn btn-unblock"; btn.textContent="↑ UNBLOCK"; btn.onclick = () => clientUnblock(ip, btn); }
-  else { btn.textContent="ERROR"; }
+  else { btn.textContent = "ERROR"; }
   btn.disabled = false;
 }
 
 async function clientUnblock(ip, btn) {
   btn.disabled = true; btn.textContent = "...";
-  const res = await fetch("/api/action/unblock", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({client: ip}) });
-  const d = await res.json();
+  const d = await (await fetch("/api/action/unblock", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({client:ip}) })).json();
   if (d.ok) { blockedClients.delete(ip); btn.className="btn btn-block"; btn.textContent="✕ BLOCK"; btn.onclick = () => clientBlock(ip, btn); }
-  else { btn.textContent="ERROR"; }
+  else { btn.textContent = "ERROR"; }
   btn.disabled = false;
 }
 
@@ -642,13 +614,12 @@ function renderRecent(queries) {
   const firstDomain = queries[0]?.domain;
   const isNew = lastRecentDomain && firstDomain && firstDomain !== lastRecentDomain;
   lastRecentDomain = firstDomain;
-
   document.getElementById("recent-list").innerHTML = queries.map((q, i) => `
     <div class="query-row${q.blocked ? ' is-blocked' : ''}${i === 0 && isNew ? ' flash-new' : ''}">
       <span class="q-time">${q.time}</span>
       <span class="q-domain" title="${q.domain}">${q.domain}</span>
       <span class="q-client">${q.client}</span>
-      <span class="q-status"><span class="badge ${badgeClass(q.status)}">${q.blocked?"BLOCKED":q.status.includes("Cache")?"CACHED":"ALLOWED"}</span></span>
+      <span class="q-status"><span class="badge ${badgeClass(q.status)}">${q.blocked ? "BLOCKED" : q.status.includes("Cache") ? "CACHED" : "ALLOWED"}</span></span>
     </div>
   `).join("");
 }

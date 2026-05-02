@@ -37,43 +37,46 @@ The following demonstrates the full detection-to-containment cycle using a live 
 
 The client machine is manually configured to use the Raspberry Pi (in this case example with an IP of `192.168.0.2`, and a windows machine with an IP of `192.168.0.74`) as its DNS server, routing all queries through Pi-hole and the dashboard.
 
-![DNS Configuration](Screenshots/dnsconfig.png)
+##
 
 ### Step 1 — Detection: Watchlist Alert Fires
 
 `reddit.com` was added to the watchlist to simulate monitoring a policy-violating or suspicious domain. The moment a device on the network queried it, the dashboard fired four real-time toast alerts — showing the domain, the client IP (`192.168.0.74`), and that the queries were allowed through (not yet blocked).
 
-![Watchlist Alert](Screenshots/redditalert.png)
+![DNS Configuration](Screenshots/dnsconfig.png)
 
 ### Step 2 — Containment: Client Blocked via Dashboard
 
 From the Client Activity table, the offending client (`192.168.0.74`) was blocked with one click. The dashboard inserted iptables `DOCKER-USER` DROP rules for port 53 (UDP + TCP). An `nslookup` run immediately after from the blocked machine confirms DNS resolution is failing — the Pi is receiving the query but dropping it.
 
-![Block Enforcement](Screenshots/blockexample.png)
+![Watchlist Alert](Screenshots/redditalert.png)
 
 ### Step 3 — Verification: Site Unreachable
 
 With DNS blocked, the client can no longer resolve any domains. Attempting to navigate to a website results in a browser-level failure — the domain cannot be reached because no IP address can be returned.
 
-![Site Unreachable](Screenshots/blockexample2.png)
+![Block Enforcement](Screenshots/blockexample.png)
+
 
 ### Step 4 — Pi-hole Sinkhole Response
 
 For domains on Pi-hole's blocklist, rather than a timeout the client receives Pi-hole's sinkhole response — a raw HTML error page served from the Pi itself, confirming the block is active and working at the DNS layer.
 
-![Sinkhole Response](Screenshots/blockexample3.png)
+![Site Unreachable](Screenshots/blockexample2.png)
 
 ### Pi-hole Native Dashboard
 
 The native Pi-hole interface shows the underlying query log and confirms all traffic is being captured and logged for analysis.
 
-![Pi-hole Query Log](Screenshots/piholedashquery.png)
-
-![Pi-hole Dashboard](Screenshots/piholedash.png)
+![Sinkhole Response](Screenshots/blockexample3.png)
 
 ### Group Management
 
 Pi-hole's group management was used to organize clients by category (IoT, Executives, General Users), allowing different blocklist policies to be applied per group — demonstrating policy-based containment rather than just blanket blocking.
+
+![Pi-hole Query Log](Screenshots/piholedashquery.png)
+
+![Pi-hole Dashboard](Screenshots/piholedash.png)
 
 ![Group Management](Screenshots/piholedashgroupmgmt.png)
 

@@ -2,7 +2,7 @@
 
 ### Live Dashboard with Real-Time DNS Monitoring and Client Enforcement
 
-> 📸 **[HERO SCREENSHOT — Full dashboard in browser, all panels visible with live data populated. Ideally taken during active network traffic so numbers are real and the recent queries feed is full. Landscape crop, as wide as possible.]**
+![Dashboard Overview](Screenshots/newpiholedash.png)
 
 ---
 
@@ -29,7 +29,57 @@ The dashboard directly supports two phases of the NIST SP 800-61 Incident Respon
 
 ---
 
-## 3. System Architecture
+## 3. Simulated Incident Walkthrough
+
+The following demonstrates the full detection-to-containment cycle using a live test on the network.
+
+### Setup: DNS Pointed at Pi-hole
+
+The client machine is manually configured to use the Raspberry Pi (`192.168.0.2`) as its DNS server, routing all queries through Pi-hole and the dashboard.
+
+![DNS Configuration](Screenshots/dnsconfig.png)
+
+### Step 1 — Detection: Watchlist Alert Fires
+
+`reddit.com` was added to the watchlist to simulate monitoring a policy-violating or suspicious domain. The moment a device on the network queried it, the dashboard fired four real-time toast alerts — showing the domain, the client IP (`192.168.0.74`), and that the queries were allowed through (not yet blocked).
+
+![Watchlist Alert](Screenshots/redditalert.png)
+
+### Step 2 — Containment: Client Blocked via Dashboard
+
+From the Client Activity table, the offending client (`192.168.0.74`) was blocked with one click. The dashboard inserted iptables `DOCKER-USER` DROP rules for port 53 (UDP + TCP). An `nslookup` run immediately after from the blocked machine confirms DNS resolution is failing — the Pi is receiving the query but dropping it.
+
+![Block Enforcement](Screenshots/blockexample.png)
+
+### Step 3 — Verification: Site Unreachable
+
+With DNS blocked, the client can no longer resolve any domains. Attempting to navigate to a website results in a browser-level failure — the domain cannot be reached because no IP address can be returned.
+
+![Site Unreachable](Screenshots/blockexample2.png)
+
+### Step 4 — Pi-hole Sinkhole Response
+
+For domains on Pi-hole's blocklist, rather than a timeout the client receives Pi-hole's sinkhole response — a raw HTML error page served from the Pi itself, confirming the block is active and working at the DNS layer.
+
+![Sinkhole Response](Screenshots/blockexample3.png)
+
+### Pi-hole Native Dashboard
+
+The native Pi-hole interface shows the underlying query log and confirms all traffic is being captured and logged for analysis.
+
+![Pi-hole Query Log](Screenshots/piholedashquery.png)
+
+![Pi-hole Dashboard](Screenshots/piholedash.png)
+
+### Group Management
+
+Pi-hole's group management was used to organize clients by category (IoT, Executives, General Users), allowing different blocklist policies to be applied per group — demonstrating policy-based containment rather than just blanket blocking.
+
+![Group Management](Screenshots/piholedashgroupmgmt.png)
+
+---
+
+## 4. System Architecture
 
 ### Physical Setup
 
@@ -86,26 +136,24 @@ Client DNS query arrives on eth0
 
 ---
 
-## 4. Tools and Stack
+## 5. Tools and Stack
 
-| Component           | Tool                             | Purpose                                              |
-| ------------------- | -------------------------------- | ---------------------------------------------------- |
-| DNS Sinkhole        | Pi-hole (Docker)                 | DNS resolver, blocklist enforcement, query logging   |
-| Container Runtime   | Docker                           | Isolates Pi-hole on the Raspberry Pi                 |
-| Backend             | Python 3 / Flask                 | Serves dashboard, reads DB, manages SSE streams      |
-| Database            | SQLite (`pihole-FTL.db`)       | All historical DNS query data                        |
-| Frontend            | Vanilla HTML/CSS/JS + Chart.js   | Dashboard UI, no framework dependencies              |
-| Network Enforcement | iptables (`DOCKER-USER` chain) | Per-client DNS blocking via port 53 DROP rules       |
-| DNS Allowlisting    | `pihole -w` CLI                | Domain allowlisting via subprocess call              |
-| Persistence         | `blocked_clients.json`         | Blocked IPs persisted to disk, re-applied on restart |
-| Process Management  | systemd                          | Auto-starts dashboard on boot, restarts on crash     |
-| Remote Dev          | VS Code Remote SSH               | Development directly on the Raspberry Pi             |
-
-> 📸 **[VS CODE SCREENSHOT — VS Code with the Remote SSH connection open to the Pi (the green "SSH: 192.168.0.2" bar visible in the bottom-left corner), with App.py or index.html open in the editor.]**
+| Component | Tool | Purpose |
+| --- | --- | --- |
+| DNS Sinkhole | Pi-hole (Docker) | DNS resolver, blocklist enforcement, query logging |
+| Container Runtime | Docker | Isolates Pi-hole on the Raspberry Pi |
+| Backend | Python 3 / Flask | Serves dashboard, reads DB, manages SSE streams |
+| Database | SQLite (`pihole-FTL.db`) | All historical DNS query data |
+| Frontend | Vanilla HTML/CSS/JS + Chart.js | Dashboard UI, no framework dependencies |
+| Network Enforcement | iptables (`DOCKER-USER` chain) | Per-client DNS blocking via port 53 DROP rules |
+| DNS Allowlisting | `pihole -w` CLI | Domain allowlisting via subprocess call |
+| Persistence | `blocked_clients.json` | Blocked IPs persisted to disk, re-applied on restart |
+| Process Management | systemd | Auto-starts dashboard on boot, restarts on crash |
+| Remote Dev | VS Code Remote SSH | Development directly on the Raspberry Pi |
 
 ---
 
-## 5. Dashboard Features
+## 6. Dashboard Features
 
 ### Real-Time Stats (event-driven, not polled)
 
@@ -113,8 +161,6 @@ Client DNS query arrives on eth0
 * Unique clients and unique domains seen
 * Block rate color-coded: green (normal), yellow (elevated >15%), red (high >30%)
 * "Updated" timestamp reflects the moment of the last push from the server
-
-> 📸 **[SCREENSHOT — Stat cards row at the top of the dashboard. Best taken when block rate is elevated so the red color-coding is visible. Crop tightly to just the five cards.]**
 
 ### Query Volume Timeline
 
@@ -126,8 +172,6 @@ Client DNS query arrives on eth0
 * Doughnut chart breaking down query outcomes by Pi-hole status code
 * Color-coded: blocked (red), cached (blue), allowed (green)
 
-> 📸 **[SCREENSHOT — The two chart panels side by side: the timeline on the left showing a visible spike in blocked traffic, and the doughnut chart on the right.]**
-
 ### Client Activity Table
 
 * Per-device breakdown: total, allowed, blocked, block percentage with mini bar
@@ -136,8 +180,6 @@ Client DNS query arrives on eth0
 * Blocked clients marked with a red indicator that persists across page refreshes
 * Block state is loaded from the server on page load — refreshing the browser never resets the UI incorrectly
 * Inline error display shows the exact iptables error if a block operation fails
-
-> 📸 **[SCREENSHOT — Client activity table with at least 2-3 devices visible. Ideally one client has been blocked so the red ● indicator and UNBLOCK button are visible in the same shot.]**
 
 ### Top Blocked / Top Allowed Domains
 
@@ -149,8 +191,6 @@ Client DNS query arrives on eth0
 * Last 50 DNS queries with timestamp, domain, client IP, and status badge
 * Blocked rows highlighted in red
 * New queries flash green on arrival so activity is visible at a glance
-
-> 📸 **[SCREENSHOT — Recent queries feed scrolled to the top, showing a mix of red-highlighted blocked rows and normal allowed rows.]**
 
 ### Watchlist Manager
 
@@ -165,8 +205,6 @@ Client DNS query arrives on eth0
 * One-click actions from the toast: **Allow Domain** (adds to Pi-hole allowlist via `pihole -w`) or **Block Client** (iptables DROP)
 * Alerts auto-dismiss after 30 seconds; logged to the Alert Log panel
 
-> 📸 **[SCREENSHOT — Trigger by running `nslookup chatgpt.com <pi-ip>` from another device while the dashboard is open. The red toast notification will pop up in the top-right corner. Capture it before it dismisses.]**
-
 ### Alert Log
 
 * Persistent in-session log of all watchlist hits
@@ -174,35 +212,33 @@ Client DNS query arrives on eth0
 
 ---
 
-## 6. Running the Dashboard
+## 7. Running the Dashboard
 
 ### Prerequisites
 
-```bash
+```
 pip3 install flask --break-system-packages
 ```
 
 ### Option A — Run manually (useful for testing)
 
-```bash
+```
 sudo python3 App.py
 ```
 
 `sudo` is required for iptables access. The watcher thread starts automatically.
 
-> 📸 **[TERMINAL SCREENSHOT — SSH session showing the app starting: the `[*] Watcher started` and `[*] Watermark set at query ID XXXXX` lines, and ideally a `[!] WATCHLIST HIT` line from a triggered alert.]**
-
 ### Option B — Auto-start with systemd (recommended for permanent deployment)
 
 Create the service file:
 
-```bash
+```
 sudo nano /etc/systemd/system/pihole-dashboard.service
 ```
 
 Paste the following, adjusting the path to match where `App.py` lives:
 
-```ini
+```
 [Unit]
 Description=Pi-hole Dashboard
 After=network.target docker.service
@@ -222,7 +258,7 @@ WantedBy=multi-user.target
 
 Enable and start:
 
-```bash
+```
 sudo systemctl daemon-reload
 sudo systemctl enable pihole-dashboard
 sudo systemctl start pihole-dashboard
@@ -230,13 +266,13 @@ sudo systemctl start pihole-dashboard
 
 Check status:
 
-```bash
+```
 sudo systemctl status pihole-dashboard
 ```
 
 Useful management commands:
 
-```bash
+```
 sudo systemctl stop pihole-dashboard       # stop
 sudo systemctl restart pihole-dashboard    # restart
 sudo journalctl -u pihole-dashboard -f     # live logs
@@ -252,23 +288,23 @@ http://192.168.0.2:5000
 
 ---
 
-## 7. API Reference
+## 8. API Reference
 
-| Method | Endpoint                  | Description                                        |
-| ------ | ------------------------- | -------------------------------------------------- |
-| GET    | `/api/stats`            | One-shot full stats snapshot (JSON)                |
-| GET    | `/api/stats/stream`     | SSE stream — pushes stats every 2 seconds         |
-| GET    | `/api/alerts/stream`    | SSE stream — pushes watchlist hits instantly      |
-| GET    | `/api/blocked-clients`  | Returns current list of blocked IPs from server    |
-| POST   | `/api/action/allow`     | Add domain to Pi-hole allowlist via `pihole -w`  |
-| POST   | `/api/action/block`     | Block client DNS via iptables `DOCKER-USER` DROP |
-| POST   | `/api/action/unblock`   | Remove iptables block for client IP                |
-| POST   | `/api/watchlist/add`    | Add domain to watchlist                            |
-| POST   | `/api/watchlist/remove` | Remove domain from watchlist                       |
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| GET | `/api/stats` | One-shot full stats snapshot (JSON) |
+| GET | `/api/stats/stream` | SSE stream — pushes stats every 2 seconds |
+| GET | `/api/alerts/stream` | SSE stream — pushes watchlist hits instantly |
+| GET | `/api/blocked-clients` | Returns current list of blocked IPs from server |
+| POST | `/api/action/allow` | Add domain to Pi-hole allowlist via `pihole -w` |
+| POST | `/api/action/block` | Block client DNS via iptables `DOCKER-USER` DROP |
+| POST | `/api/action/unblock` | Remove iptables block for client IP |
+| POST | `/api/watchlist/add` | Add domain to watchlist |
+| POST | `/api/watchlist/remove` | Remove domain from watchlist |
 
 ---
 
-## 8. Key Design Decisions
+## 9. Key Design Decisions
 
 **Event-driven over polling.** The watcher thread drives all updates. The browser never polls — it holds open two SSE connections and reacts to pushes. This eliminates the artificial delay of an interval timer and makes the dashboard feel genuinely live.
 
@@ -288,21 +324,24 @@ http://192.168.0.2:5000
 
 ---
 
-## 9. Limitations and Future Work
+## 10. Limitations and Lessons Learned
 
-**Encrypted DNS (DoH/DoT).** Devices or apps configured to use DNS-over-HTTPS bypass Pi-hole entirely and will not appear in the dashboard. This is a real gap in any DNS-based monitoring approach.
+**Watchlist persistence.** The watchlist is held in memory and lost when the Flask app restarts. In a real incident, losing monitored domains mid-response is an unacceptable gap. A production version should persist the watchlist to disk alongside `blocked_clients.json`.
 
-**Blocklist freshness.** Pi-hole only blocks what is on its lists. Newly registered domains or C2 servers not yet in any blocklist will pass through. Behavioral detection (the watchlist and per-client volume analysis) partially compensates for this.
+**No authentication.** Any device on the local network can access the dashboard, block clients, or modify the watchlist. For a home lab this is acceptable, but in a production deployment this would require at minimum a token-based auth layer on all API endpoints. This is a known shortcoming of the current implementation.
 
-**iptables vs. nftables.** Newer Linux kernels on Raspberry Pi OS use nftables as the backend. The iptables commands used here work via the compatibility layer but a future version should call nftables directly.
+**Encrypted DNS (DoH/DoT).** Devices or apps configured to use DNS-over-HTTPS bypass Pi-hole entirely and will not appear in the dashboard. This is a real and significant gap in any DNS-based monitoring approach — a determined attacker or a modern browser in DoH mode is invisible to this tool.
+
+**Blocklist freshness.** Pi-hole only blocks what is on its lists. Newly registered domains or C2 servers not yet in any blocklist will pass through. Behavioral detection via the watchlist and per-client volume anomalies partially compensates for this, but is not a substitute for threat intelligence feeds.
+
+**iptables vs. nftables.** Newer Linux kernels on Raspberry Pi OS use nftables as the backend. The iptables commands used here work via the compatibility layer, but a future version should call nftables directly.
 
 **IPv6.** The current iptables rules only cover IPv4. Clients communicating with Pi-hole over IPv6 require equivalent `ip6tables` rules in the `DOCKER-USER` chain to be blocked effectively.
-
-**Session-only watchlist.** Watchlist additions made via the dashboard are held in memory and lost when the Flask app restarts. Persisting the watchlist to disk (alongside `blocked_clients.json`) would be a straightforward improvement.
 
 **Potential extensions:**
 
 * Persistent watchlist storage (JSON or SQLite)
+* Token-based authentication on all API endpoints
 * Email or webhook alerts for watchlist hits
 * Per-client query history drill-down view
 * Automatic blocklist updates from threat intelligence feeds
@@ -311,13 +350,13 @@ http://192.168.0.2:5000
 
 ---
 
-## 10. Resources
+## 11. Resources
 
-* Pi-hole Documentation: [https://docs.pi-hole.net/](https://docs.pi-hole.net/)
-* Pi-hole Docker Setup: [https://github.com/pi-hole/docker-pi-hole](https://github.com/pi-hole/docker-pi-hole)
-* Flask Documentation: [https://flask.palletsprojects.com/](https://flask.palletsprojects.com/)
-* Server-Sent Events (MDN): [https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events)
-* Chart.js Documentation: [https://www.chartjs.org/docs/](https://www.chartjs.org/docs/)
-* iptables man page: [https://linux.die.net/man/8/iptables](https://linux.die.net/man/8/iptables)
-* NIST SP 800-61 (Incident Handling Guide): [https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-61r2.pdf](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-61r2.pdf)
-* DNS Sinkholes Explained: [https://www.sans.org/white-papers/33523/](https://www.sans.org/white-papers/33523/)
+* Pi-hole Documentation: <https://docs.pi-hole.net/>
+* Pi-hole Docker Setup: <https://github.com/pi-hole/docker-pi-hole>
+* Flask Documentation: <https://flask.palletsprojects.com/>
+* Server-Sent Events (MDN): <https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events>
+* Chart.js Documentation: <https://www.chartjs.org/docs/>
+* iptables man page: <https://linux.die.net/man/8/iptables>
+* NIST SP 800-61 (Incident Handling Guide): <https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-61r2.pdf>
+* DNS Sinkholes Explained: <https://www.sans.org/white-papers/33523/>

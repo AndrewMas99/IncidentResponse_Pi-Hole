@@ -8,7 +8,7 @@
 
 ## 1. Project Overview
 
-This project demonstrates how Pi-hole, a network-wide DNS sinkhole, can be used as a lightweight incident response tool to detect and contain suspicious network activity. Pi-hole runs inside a Docker container on a dedicated Raspberry Pi and is configured as the DNS resolver for all devices on the local network. Every DNS query made by every device is visible, logged, and subject to enforcement in real time.
+This project demonstrates how Pi-hole, a network-wide DNS sinkhole, can be used as a lightweight incident response tool to detect and contain suspicious network activity. Additionally easy deployment allows Pi-hole runs inside a Docker container on a dedicated Raspberry Pi and is configured as the DNS resolver for all devices on the local network. Every DNS query made by every device is visible, logged, and subject to enforcement in real time.
 
 The core deliverable is a custom Flask-based web dashboard (`App.py` + `index.html`) that connects directly to Pi-hole's SQLite database to provide a genuinely real-time view of network DNS activity — with no external dependencies, no third-party dashboards, and no polling delay. The dashboard includes watchlist-based alerting, per-client DNS enforcement via iptables, and a domain allowlist manager, all accessible from a browser on the local network.
 
@@ -18,7 +18,7 @@ The core deliverable is a custom Flask-based web dashboard (`App.py` + `index.ht
 
 ### Why Pi-hole Matters in Incident Response
 
-Most security incidents do not start with a loud alarm. They start quietly — a device reaching out to a domain it should not be contacting. DNS is one of the most fundamental and most abused protocols in networking. Malware uses DNS to phone home to command-and-control (C2) servers. Phishing campaigns rely on DNS to redirect users. Data exfiltration can be tunneled through DNS. DNS-level visibility is therefore a foundational component of network security monitoring.
+DNS is one of the most fundamental and most abused protocols in networking. Malware uses DNS to phone home to command-and-control (C2) servers. Phishing campaigns rely on DNS to redirect users. Data exfiltration can be tunneled through DNS. DNS-level visibility is therefore a foundational component of network security monitoring.
 
 This project takes that principle and builds a practical, self-hosted tool on top of it. By sitting directly on the Raspberry Pi running Pi-hole and reading the same SQLite database that Pi-hole itself uses, the dashboard achieves sub-second update latency without requiring Kafka, a message broker, or any cloud infrastructure.
 
@@ -35,7 +35,7 @@ The following demonstrates the full detection-to-containment cycle using a live 
 
 ### Setup: DNS Pointed at Pi-hole
 
-The client machine is manually configured to use the Raspberry Pi (`192.168.0.2`) as its DNS server, routing all queries through Pi-hole and the dashboard.
+The client machine is manually configured to use the Raspberry Pi (in this case example with an IP of `192.168.0.2`) as its DNS server, routing all queries through Pi-hole and the dashboard.
 
 ![DNS Configuration](Screenshots/dnsconfig.png)
 

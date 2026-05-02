@@ -35,7 +35,7 @@ The following demonstrates the full detection-to-containment cycle using a live 
 
 ### Setup: DNS Pointed at Pi-hole
 
-The client machine is manually configured to use the Raspberry Pi (in this case example with an IP of `192.168.0.2`) as its DNS server, routing all queries through Pi-hole and the dashboard.
+The client machine is manually configured to use the Raspberry Pi (in this case example with an IP of `192.168.0.2`, and a windows machine with an IP of `192.168.0.74`) as its DNS server, routing all queries through Pi-hole and the dashboard.
 
 ![DNS Configuration](Screenshots/dnsconfig.png)
 
